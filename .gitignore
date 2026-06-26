@@ -1,0 +1,23 @@
+# Generated data — never commit CSVs with synthetic PII
+data/
+*.csv
+
+# Config files with org credentials
+config-*.json
+config.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+*.swp

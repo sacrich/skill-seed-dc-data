@@ -1,0 +1,91 @@
+<template>
+  <div class="hero">
+    <!-- Brand eyebrow -->
+    <div class="maison">__CLIENT_UPPER__ · INSURANCE 360</div>
+
+    <!-- Avatar + name -->
+    <div class="avatar-row">
+      <div class="avatar">{initials}</div>
+      <div class="name-block">
+        <div class="name">{fullName}</div>
+        <div class="sub">{cityCountry}</div>
+      </div>
+      <template lwc:if={isVip}>
+        <div class="vip-crest" title="VIP">★</div>
+      </template>
+    </div>
+
+    <!-- Contact info -->
+    <div class="info-row"><span class="icn">✉</span><span>{email}</span></div>
+    <div class="info-row"><span class="icn">☏</span><span>{phone}</span></div>
+
+    <!-- Divider -->
+    <div class="divider"></div>
+
+    <!-- Churn risk gauge -->
+    <div class="gauge-section">
+      <div class="gauge-label">Churn Risk · סיכון נטישה</div>
+      <div class="gauge-wrap">
+        <svg class="gauge-svg" viewBox="0 0 120 70">
+          <!-- background arc -->
+          <path d="M 10 65 A 50 50 0 0 1 110 65" fill="none" stroke-width="10"
+                class="gauge-bg-arc"></path>
+          <!-- value arc — length is proportional to churnScore (0–100) -->
+          <path d="M 10 65 A 50 50 0 0 1 110 65" fill="none" stroke-width="10"
+                class="gauge-val-arc"
+                style={gaugeStyle}></path>
+          <!-- centre text -->
+          <text x="60" y="58" text-anchor="middle" class="gauge-pct">{churnPct}</text>
+        </svg>
+        <div class={churnRiskClass}>{churnRiskLabel}</div>
+      </div>
+    </div>
+
+    <!-- KPI pills -->
+    <div class="kpis">
+      <div class="kpi">
+        <div class="kpi-val">{activePolicies}</div>
+        <div class="kpi-lbl">Active Policies</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-val">{monthlyPremiumFmt}</div>
+        <div class="kpi-lbl">Monthly Premium</div>
+      </div>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi">
+        <div class="kpi-val">{coverageFmt}</div>
+        <div class="kpi-lbl">Total Coverage</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-val">{claimsThisYear}</div>
+        <div class="kpi-lbl">Claims {thisYear}</div>
+      </div>
+    </div>
+
+    <!-- NPS + tier badges -->
+    <div class="badges">
+      <template lwc:if={hasLoyalty}>
+        <div class={loyaltyClass}>
+          <div class="badge-lbl">Loyalty</div>
+          <div class="badge-val">{bundle.loyaltyTier}</div>
+        </div>
+      </template>
+      <template lwc:if={hasNps}>
+        <div class="badge-card nps">
+          <div class="badge-lbl">NPS</div>
+          <div class="badge-val">{npsFmt}</div>
+        </div>
+      </template>
+    </div>
+
+    <!-- LTV -->
+    <template lwc:if={hasLtv}>
+      <div class="ltv-card">
+        <div class="ltv-label">Lifetime Value · שווי לקוח</div>
+        <div class="ltv-value">{ltvFmt}</div>
+      </div>
+    </template>
+  </div>
+</template>

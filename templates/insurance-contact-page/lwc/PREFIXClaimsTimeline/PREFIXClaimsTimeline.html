@@ -1,0 +1,46 @@
+<template>
+  <div class="wrap">
+    <div class="panel-header">
+      <span class="panel-title">Claims History · היסטוריית תביעות</span>
+      <span class="panel-sub">Data Cloud · InsuranceClaim__dlm</span>
+    </div>
+
+    <template lwc:if={loading}>
+      <div class="loading">
+        <lightning-spinner alternative-text="Loading" size="small" variant="brand"></lightning-spinner>
+      </div>
+    </template>
+
+    <template lwc:if={hasClaims}>
+      <div class="timeline">
+        <template for:each={claims} for:item="cl">
+          <div key={cl.id} class="claim">
+            <div class="claim-line">
+              <div class="claim-dot"></div>
+              <div class="claim-connector"></div>
+            </div>
+            <div class="claim-body">
+              <div class="claim-top">
+                <span class="claim-type">{cl.claimType}</span>
+                <span class="claim-amount">{cl.amountFmt}</span>
+                <span class={cl.statusClass}>{cl.status}</span>
+              </div>
+              <div class="claim-meta">
+                <span>Filed: {cl.claimDate}</span>
+                <template lwc:if={cl.resolutionDate}>
+                  <span class="sep">·</span>
+                  <span>Resolved: {cl.resolutionDate}</span>
+                </template>
+              </div>
+              <div class="claim-id">{cl.id}</div>
+            </div>
+          </div>
+        </template>
+      </div>
+    </template>
+
+    <template lwc:if={showEmpty}>
+      <div class="empty">No claims on record · אין תביעות</div>
+    </template>
+  </div>
+</template>

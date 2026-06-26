@@ -1,0 +1,58 @@
+:host {
+  --c-primary:      __C_PRIMARY__;
+  --c-accent:       __C_ACCENT__;
+  --c-accent-deep:  __C_ACCENT_DEEP__;
+  --c-border:       __C_BORDER__;
+  --c-muted:        __C_MUTED__;
+  --c-bg-alt:       __C_BG_ALT__;
+  --c-bg-alt2:      __C_BG_ALT2__;
+}
+
+.wrap {
+  font-family: "Helvetica Neue", Arial, sans-serif;
+  background: var(--c-bg-alt); border: 1px solid var(--c-border); border-radius: 4px;
+}
+.panel-header {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 12px 16px 10px; border-bottom: 1px solid var(--c-border);
+}
+.panel-title { font-size: 12px; font-weight: 700; color: var(--c-primary); text-transform: uppercase; letter-spacing: .5px; }
+.panel-sub   { font-size: 10px; color: var(--c-muted); }
+
+.loading { padding: 24px; display: flex; justify-content: center; }
+
+.feed { padding: 8px 0; }
+
+.event {
+  display: flex; gap: 12px; padding: 10px 16px;
+  border-bottom: 1px solid var(--c-border);
+}
+.event:last-child { border-bottom: none; }
+
+.event-left { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 40px; flex-shrink: 0; }
+
+.icon {
+  width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 14px; border: 1px solid var(--c-border);
+}
+.icon-clicked { background: #ede9fe; color: #7c3aed; border-color: #c4b5fd; }
+.icon-opened  { background: #dbeafe; color: #1d4ed8; border-color: #93c5fd; }
+.icon-sent    { background: var(--c-bg-alt2); color: var(--c-muted); }
+
+.event-date { font-size: 9px; color: var(--c-muted); text-align: center; white-space: nowrap; }
+
+.event-body { flex: 1; }
+.campaign-name { font-size: 13px; font-weight: 600; color: var(--c-primary); margin-bottom: 2px; }
+.email-addr    { font-size: 11px; color: var(--c-muted); margin-bottom: 5px; }
+
+.signals { display: flex; gap: 5px; flex-wrap: wrap; }
+.signal {
+  padding: 2px 7px; border-radius: 10px; font-size: 9px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .3px;
+}
+.signal-clicked  { background: #ede9fe; color: #6d28d9; }
+.signal-opened   { background: #dbeafe; color: #1e40af; }
+.signal-unsub    { background: #fee2e2; color: #991b1b; }
+.signal-none     { background: var(--c-bg-alt2); color: var(--c-muted); }
+
+.empty { padding: 24px; text-align: center; color: var(--c-muted); font-size: 12px; }

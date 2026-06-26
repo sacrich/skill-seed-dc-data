@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  __CLIENT__ Insurance Customer 360 — FlexiPage layout
+  Deploy:  sf project deploy start --source-dir force-app/main/default/flexipages
+  Assign:  Lightning App Builder → Assign as org-default on Contact
+-->
+<FlexiPage xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>__CLIENT__ Insurance Customer 360 — powered by Salesforce Data Cloud</description>
+    <masterLabel>__CLIENT__ Insurance 360</masterLabel>
+    <pageType>RecordPage</pageType>
+    <sobjectType>Contact</sobjectType>
+    <type>RecordPage</type>
+    <template>
+        <name>lightning_RecordPageTemplate3Col7_3_2</name>
+    </template>
+
+    <!-- ── LEFT COLUMN (30%) — Insurance Hero sidebar ── -->
+    <flexiPageRegions>
+        <name>left</name>
+        <type>Region</type>
+        <itemInstances>
+            <componentInstance>
+                <componentName>PREFIXInsuranceHero</componentName>
+                <identifier>prefix_insurance_hero</identifier>
+            </componentInstance>
+        </itemInstances>
+    </flexiPageRegions>
+
+    <!-- ── MAIN AREA TABS ── -->
+
+    <!-- Tab: Policies -->
+    <flexiPageRegions>
+        <name>tc_policies</name>
+        <type>Facet</type>
+        <itemInstances>
+            <componentInstance>
+                <componentName>PREFIXPolicyList</componentName>
+                <identifier>prefix_policy_list</identifier>
+            </componentInstance>
+        </itemInstances>
+    </flexiPageRegions>
+
+    <!-- Tab: Claims -->
+    <flexiPageRegions>
+        <name>tc_claims</name>
+        <type>Facet</type>
+        <itemInstances>
+            <componentInstance>
+                <componentName>PREFIXClaimsTimeline</componentName>
+                <identifier>prefix_claims_timeline</identifier>
+            </componentInstance>
+        </itemInstances>
+    </flexiPageRegions>
+
+    <!-- Tab: Engagement -->
+    <flexiPageRegions>
+        <name>tc_engagement</name>
+        <type>Facet</type>
+        <itemInstances>
+            <componentInstance>
+                <componentName>PREFIXEngagementFeed</componentName>
+                <identifier>prefix_engagement_feed</identifier>
+            </componentInstance>
+        </itemInstances>
+    </flexiPageRegions>
+
+    <!-- Tab: Contact Details (native) -->
+    <flexiPageRegions>
+        <name>tc_details</name>
+        <type>Facet</type>
+        <itemInstances>
+            <componentInstance>
+                <componentName>force:detailPanel</componentName>
+                <identifier>dp_details</identifier>
+            </componentInstance>
+        </itemInstances>
+    </flexiPageRegions>
+
+    <!-- Tabset (center + right 70%) -->
+    <flexiPageRegions>
+        <name>center</name>
+        <type>Region</type>
+        <itemInstances>
+            <componentInstance>
+                <componentName>flexipage:tabset</componentName>
+                <identifier>main_tabset</identifier>
+                <componentInstanceProperties>
+                    <name>tabList</name>
+                    <value>[
+                        {"label":"Policies · פוליסות","name":"tc_policies"},
+                        {"label":"Claims · תביעות","name":"tc_claims"},
+                        {"label":"Engagement · מעורבות","name":"tc_engagement"},
+                        {"label":"Details","name":"tc_details"}
+                    ]</value>
+                </componentInstanceProperties>
+            </componentInstance>
+        </itemInstances>
+    </flexiPageRegions>
+
+</FlexiPage>

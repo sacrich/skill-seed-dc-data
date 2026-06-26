@@ -1,0 +1,51 @@
+<template>
+  <div class="wrap">
+    <div class="panel-header">
+      <span class="panel-title">Email Engagement · מעורבות אימייל</span>
+      <span class="panel-sub">Data Cloud · EmailEngagement__dlm</span>
+    </div>
+
+    <template lwc:if={loading}>
+      <div class="loading">
+        <lightning-spinner alternative-text="Loading" size="small" variant="brand"></lightning-spinner>
+      </div>
+    </template>
+
+    <template lwc:if={hasEvents}>
+      <div class="feed">
+        <template for:each={events} for:item="e">
+          <div key={e.id} class="event">
+            <!-- Channel icon + date -->
+            <div class="event-left">
+              <div class={e.iconClass}>✉</div>
+              <div class="event-date">{e.sentDate}</div>
+            </div>
+            <!-- Content -->
+            <div class="event-body">
+              <div class="campaign-name">{e.campaignName}</div>
+              <div class="email-addr">{e.emailAddress}</div>
+              <div class="signals">
+                <template lwc:if={e.opened}>
+                  <span class="signal signal-opened">Opened</span>
+                </template>
+                <template lwc:if={e.clicked}>
+                  <span class="signal signal-clicked">Clicked</span>
+                </template>
+                <template lwc:if={e.unsubscribed}>
+                  <span class="signal signal-unsub">Unsubscribed</span>
+                </template>
+                <template lwc:if={e.notEngaged}>
+                  <span class="signal signal-none">Delivered</span>
+                </template>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
+    </template>
+
+    <template lwc:if={showEmpty}>
+      <div class="empty">No engagement events · אין אירועי מעורבות</div>
+    </template>
+  </div>
+</template>

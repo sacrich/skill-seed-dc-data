@@ -1,0 +1,49 @@
+<template>
+  <div class="wrap">
+    <div class="panel-header">
+      <span class="panel-title">Insurance Policies · פוליסות ביטוח</span>
+      <span class="panel-sub">Data Cloud · InsurancePolicy__dlm</span>
+    </div>
+
+    <template lwc:if={loading}>
+      <div class="loading">
+        <lightning-spinner alternative-text="Loading" size="small" variant="brand"></lightning-spinner>
+      </div>
+    </template>
+
+    <template lwc:if={hasPolicies}>
+      <div class="table-wrap">
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th>Policy #</th>
+              <th>Product</th>
+              <th>Category</th>
+              <th class="num">Premium / mo</th>
+              <th class="num">Coverage</th>
+              <th>Start</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template for:each={policies} for:item="p">
+              <tr key={p.id}>
+                <td class="mono">{p.policyNumber}</td>
+                <td>{p.productName}</td>
+                <td><span class="cat-tag">{p.productCategory}</span></td>
+                <td class="num">{p.premiumFmt}</td>
+                <td class="num">{p.coverageFmt}</td>
+                <td class="date">{p.startDate}</td>
+                <td><span class={p.statusClass}>{p.status}</span></td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </template>
+
+    <template lwc:if={showEmpty}>
+      <div class="empty">No policies found · אין פוליסות</div>
+    </template>
+  </div>
+</template>

@@ -1,0 +1,53 @@
+:host {
+  --c-primary:      __C_PRIMARY__;
+  --c-accent:       __C_ACCENT__;
+  --c-accent-deep:  __C_ACCENT_DEEP__;
+  --c-border:       __C_BORDER__;
+  --c-muted:        __C_MUTED__;
+  --c-bg-alt:       __C_BG_ALT__;
+  --c-bg-alt2:      __C_BG_ALT2__;
+}
+
+.wrap {
+  font-family: "Helvetica Neue", Arial, sans-serif;
+  background: var(--c-bg-alt); border: 1px solid var(--c-border); border-radius: 4px;
+}
+.panel-header {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 12px 16px 10px; border-bottom: 1px solid var(--c-border);
+}
+.panel-title { font-size: 12px; font-weight: 700; color: var(--c-primary); text-transform: uppercase; letter-spacing: .5px; }
+.panel-sub   { font-size: 10px; color: var(--c-muted); }
+
+.loading { padding: 24px; display: flex; justify-content: center; }
+
+.timeline { padding: 12px 16px; display: flex; flex-direction: column; gap: 0; }
+
+.claim { display: flex; gap: 12px; }
+
+/* Dot + vertical connector */
+.claim-line { display: flex; flex-direction: column; align-items: center; width: 16px; flex-shrink: 0; padding-top: 4px; }
+.claim-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--c-accent); flex-shrink: 0; }
+.claim-connector { flex: 1; width: 2px; background: var(--c-border); margin: 4px 0; min-height: 20px; }
+.claim:last-child .claim-connector { display: none; }
+
+.claim-body { flex: 1; padding-bottom: 14px; }
+
+.claim-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+.claim-type { font-size: 13px; font-weight: 600; color: var(--c-primary); }
+.claim-amount { font-size: 14px; font-weight: 700; color: var(--c-accent-deep); margin-left: auto; }
+
+.claim-meta { font-size: 11px; color: var(--c-muted); margin-bottom: 2px; }
+.sep { margin: 0 4px; }
+.claim-id { font-size: 10px; font-family: monospace; color: var(--c-muted); opacity: .7; }
+
+.status-badge {
+  display: inline-block; padding: 2px 7px; border-radius: 10px;
+  font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: .3px;
+}
+.claim-approved { background: #d1fae5; color: #065f46; }
+.claim-rejected { background: #fee2e2; color: #991b1b; }
+.claim-pending  { background: #fef3c7; color: #92400e; }
+.claim-other    { background: var(--c-bg-alt2); color: var(--c-muted); }
+
+.empty { padding: 24px; text-align: center; color: var(--c-muted); font-size: 12px; }

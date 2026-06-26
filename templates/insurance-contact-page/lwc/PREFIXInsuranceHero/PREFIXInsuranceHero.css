@@ -1,0 +1,117 @@
+/* 🎨 BRAND CHARTER — palette injected at deploy time */
+:host {
+  --c-primary:      __C_PRIMARY__;
+  --c-primary-dark: __C_PRIMARY_DARK__;
+  --c-accent:       __C_ACCENT__;
+  --c-hero-ink:     __C_HERO_INK__;
+  --c-hero-ink-16:  __C_HERO_INK_16__;
+  --c-hero-accent:  __C_HERO_ACCENT__;
+  --c-border:       __C_BORDER__;
+  --c-muted:        __C_MUTED__;
+  --c-bg-alt:       __C_BG_ALT__;
+  --c-accent-deep:  __C_ACCENT_DEEP__;
+}
+
+.hero {
+  background: linear-gradient(170deg, var(--c-primary) 0%, var(--c-primary-dark) 100%);
+  color: var(--c-hero-ink);
+  padding: 20px;
+  border-radius: 4px;
+  border: 1px solid var(--c-hero-ink-16);
+  font-family: "Georgia", "Times New Roman", serif;
+}
+
+/* Eyebrow */
+.maison {
+  font-size: 9px; letter-spacing: 4px; color: var(--c-hero-accent);
+  text-transform: uppercase; margin-bottom: 14px;
+  font-family: "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Avatar row */
+.avatar-row { display: flex; gap: 12px; align-items: center; margin-bottom: 14px; }
+.avatar {
+  width: 52px; height: 52px; border-radius: 50%; flex-shrink: 0;
+  background: transparent; border: 1.5px solid var(--c-hero-accent); color: var(--c-hero-accent);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; font-weight: 700; letter-spacing: 1px;
+}
+.name-block { flex: 1; min-width: 0; }
+.name { font-size: 19px; font-weight: 700; letter-spacing: .4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sub  { font-size: 10px; opacity: .7; letter-spacing: 1px; text-transform: uppercase;
+        font-family: "Helvetica Neue", Arial, sans-serif; margin-top: 2px; }
+.vip-crest {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: transparent; border: 1.5px solid var(--c-hero-accent); color: var(--c-hero-accent);
+  display: flex; align-items: center; justify-content: center; font-size: 15px;
+}
+
+/* Contact info */
+.info-row {
+  display: flex; gap: 9px; font-size: 12px; margin: 5px 0; align-items: center;
+  font-family: "Helvetica Neue", Arial, sans-serif; opacity: .85;
+}
+.icn { width: 16px; text-align: center; color: var(--c-hero-accent); }
+
+/* Divider */
+.divider { margin: 14px 0; border: none; border-top: 1px solid var(--c-hero-ink-16); }
+
+/* Churn gauge */
+.gauge-section { margin-bottom: 14px; }
+.gauge-label {
+  font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--c-hero-accent);
+  font-family: "Helvetica Neue", Arial, sans-serif; margin-bottom: 6px;
+}
+.gauge-wrap { display: flex; flex-direction: column; align-items: center; }
+.gauge-svg { width: 110px; height: 65px; overflow: visible; }
+
+.gauge-bg-arc  { stroke: rgba(255,255,255,.15); }
+.gauge-val-arc { transition: stroke-dasharray .6s ease; stroke-linecap: round; }
+
+.gauge-pct {
+  font-size: 18px; font-weight: 700; fill: var(--c-hero-ink);
+  font-family: "Helvetica Neue", Arial, sans-serif;
+}
+
+.risk-tag {
+  margin-top: 4px; padding: 2px 10px; border-radius: 12px;
+  font-size: 10px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase;
+  font-family: "Helvetica Neue", Arial, sans-serif;
+}
+.risk-high { background: rgba(239,68,68,.2); color: #fca5a5; }
+.risk-mid  { background: rgba(245,158,11,.2); color: #fcd34d; }
+.risk-low  { background: rgba(34,197,94,.2);  color: #86efac;  }
+
+/* KPI pills */
+.kpis { display: flex; gap: 8px; margin-bottom: 8px; }
+.kpi  { flex: 1; text-align: center; padding: 10px 6px;
+        background: var(--c-hero-ink-16); border-radius: 3px; }
+.kpi-val { font-size: 18px; font-weight: 700; color: var(--c-hero-ink); letter-spacing: .5px; }
+.kpi-lbl {
+  font-size: 8px; opacity: .65; text-transform: uppercase; letter-spacing: .5px; margin-top: 2px;
+  font-family: "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Badges row */
+.badges { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.badge-card {
+  flex: 1; min-width: 80px; padding: 8px; border-radius: 3px; text-align: center;
+  background: rgba(255,255,255,.06); border: 1px solid var(--c-hero-ink-16);
+}
+.badge-lbl { font-size: 8px; letter-spacing: 1px; text-transform: uppercase; opacity: .65; font-family: "Helvetica Neue", Arial, sans-serif; }
+.badge-val { font-size: 16px; font-weight: 700; margin-top: 3px; letter-spacing: 1px; color: var(--c-hero-ink); }
+
+.loyalty-gold     { background: linear-gradient(135deg, #b8860b, #ffd700, #b8860b); color: #222; }
+.loyalty-platinum { background: linear-gradient(135deg, #8e8e8e, #e5e4e2, #8e8e8e); color: #222; }
+.loyalty-silver   { background: linear-gradient(135deg, #737373, #c0c0c0, #737373); color: #222; }
+.loyalty-vip      { background: var(--c-hero-accent); color: var(--c-primary-dark); }
+
+.nps .badge-val { color: var(--c-hero-accent); }
+
+/* LTV card */
+.ltv-card {
+  margin-top: 12px; padding: 12px; border-radius: 3px;
+  background: var(--c-hero-ink-16); border: 1px solid var(--c-hero-ink-16); text-align: center;
+}
+.ltv-label { font-size: 8px; letter-spacing: 2px; text-transform: uppercase; color: var(--c-hero-accent); font-family: "Helvetica Neue", Arial, sans-serif; }
+.ltv-value { font-size: 26px; font-weight: 700; margin-top: 4px; color: var(--c-hero-ink); letter-spacing: .5px; }
