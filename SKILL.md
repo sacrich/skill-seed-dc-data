@@ -76,6 +76,68 @@ The wizard must diagnose, act, and verify at each step. Rules:
 
 ## WIZARD FLOW
 
+### STEP 0 — Resume check (always run first, silently)
+
+Before doing anything, scan the current directory for `state-*.json` files:
+
+```bash
+ls state-*.json 2>/dev/null
+```
+
+If one or more state files exist, say:
+
+> 🔄 I found an in-progress demo session:
+>
+> | Slug | Industry | Org | Last step completed |
+> |------|----------|-----|-------------------|
+> | Clalit | healthcare | demo-clalit | ir_completed |
+>
+> Would you like to **resume** this session, or **start fresh**?
+> (Resuming skips already-completed steps.)
+
+- **Resume** → load the state file, skip all steps marked `true`, continue from the first `false` step.
+- **Start fresh** → ask if they want to delete the existing state file before beginning.
+- **Multiple state files** → list all and ask which to resume.
+
+If no state files exist → proceed directly to Step 1.
+
+---
+
+**State file format** (`state-<slug>.json` written in CWD after each step):
+
+```json
+{
+  "slug": "Clalit",
+  "industry": "healthcare",
+  "org_alias": "demo-clalit",
+  "b2b": false,
+  "market": "israel",
+  "config_file": "config-clalit.json",
+  "steps": {
+    "csv_generated":       true,
+    "streams_uploaded":    true,
+    "ingestion_verified":  true,
+    "dmos_created":        true,
+    "mappings_created":    true,
+    "relationships_created": true,
+    "ir_triggered":        true,
+    "ir_completed":        true,
+    "cis_created":         false,
+    "cis_verified":        false,
+    "segments_created":    false
+  },
+  "last_updated": "2026-06-26T18:30:00"
+}
+```
+
+**Write rules:**
+- Write the state file after **every step that succeeds** — not at the end, after each individual step.
+- Update `last_updated` to current UTC time on every write.
+- Never delete the state file mid-session — only delete it at Step 7 (done) or when cleanup.py runs.
+- If Claude Code session dies and restarts, the state file is the single source of truth for where to resume.
+
+---
+
 ### STEP 1 — Connect the org
 
 **Say:**
@@ -1079,6 +1141,11 @@ After 3 attempts still 0: STOP and diagnose:
 
 ### STEP 7 — Done summary
 
+Delete the state file (session complete):
+```bash
+rm state-<slug>.json
+```
+
 ```
 🎉  Demo data seeded for <CLIENT>
 
@@ -1108,6 +1175,13 @@ After 3 attempts still 0: STOP and diagnose:
   2. (Insurance) Deploy the Customer 360 page:
        python3 <SKILL_DIR>/scripts/deploy_insurance_page.py --config config-<slug>.json
   3. Setup → App Builder → assign as org default
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  TO RESET THIS DEMO (when org needs to be reused)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  python3 <SKILL_DIR>/scripts/cleanup.py --config config-<slug>.json
+  # Deletes segments, CIs, and streams for this slug.
+  # Add --full to also remove industry DMOs and relationships.
 ```
 
 ---
