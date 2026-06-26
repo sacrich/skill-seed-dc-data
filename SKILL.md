@@ -40,6 +40,24 @@ Step 7   Done summary             next steps, timing, verification commands
 
 ---
 
+## ACTIVE RECOVERY PROTOCOL
+
+**Never wait passively. Every failure has a specific recovery action.**
+
+The wizard must diagnose, act, and verify at each step. Rules:
+
+| Principle | Meaning |
+|-----------|---------|
+| **No blind waiting** | If a step shows 0 rows / 0 members / error after reasonable time — don't wait longer. Diagnose the cause and take a corrective action. |
+| **Status-based decisions** | Always read the actual status code/message before deciding. `FAILED` ≠ `PROCESSING` ≠ `NONE` — each has a different fix. |
+| **Max 2 passive retries** | Re-trigger a job at most twice before switching to active diagnosis. The third attempt must be based on a concrete fix. |
+| **Never report done with 0** | A CI with 0 rows or a segment with 0 members is not done. It is broken. Fix it or escalate — never mark as complete. |
+| **Auto-adjust thresholds** | Segment with 0 members → lower threshold by 20%, retry. Repeat up to 3 times. Only escalate if still 0 after 3 attempts. |
+| **Read the error** | Every API error body contains a reason. Read it, parse it, match it to a known fix. Do not reply with "see GOTCHAS" — apply the fix inline. |
+| **Escalate clearly** | If after 3 active attempts a step is still failing, stop and tell the SE exactly what is wrong, what you tried, and what they need to do manually. |
+
+---
+
 ## CRITICAL DATA RULES (enforce silently, never skip)
 
 | Rule | Detail |
@@ -472,10 +490,18 @@ Say:
 > This uploads the CSVs to Salesforce Drive and creates the Data Streams (~3-8 minutes).
 > Come back and type **done** when it finishes (or paste any error output).
 
-Wait. When user returns:
-- All streams show ✓ or "duplicate" → proceed to Step 5b.
-- Any stream failed with S3 error → advise to retry the command.
-- Any stream failed with API error → diagnose (see GOTCHAS section).
+Wait. When user returns, classify each stream's output:
+
+| Output | Meaning | Action |
+|--------|---------|--------|
+| `✓` or `duplicate` | Success | Proceed |
+| `S3 error` / `presigned URL` / `403` | S3 credential expired | Ask SE to re-run the command immediately — S3 URLs expire in ~15 min |
+| `409 DUPLICATE_VALUE` on stream name | Stream already exists (previous run) | Treat as success — idempotent |
+| `400 INVALID_INPUT` / bad stream name | Name has invalid characters or is too long | Fix: slugify name (PascalCase, no spaces, ≤ 40 chars) and re-run |
+| `500` on stream creation | Platform issue | Wait 2 min, re-run once. If repeats → skip that stream, note it |
+| Connection error / timeout | Network issue | Re-run the command |
+
+If **any** stream is not ✓ or duplicate after 2 attempts → do NOT proceed to Step 5b. Show the SE the exact error and the fix before continuing.
 
 ---
 
@@ -506,15 +532,30 @@ Expected confirmation:
 ✅  <Slug>_Email_Engagement      80,000 rows  (SUCCESS)
 ```
 
-If any stream stays stuck at 0 rows after 5 minutes → trigger manually:
+**Active recovery by status — act immediately, do not wait indefinitely:**
+
+| `lastRunStatus` | rows | Action |
+|-----------------|------|--------|
+| `SUCCESS` | > 0 | ✅ Done |
+| `SUCCESS` | = 0 | ⚠️ Datetime format issue — check Engagement DLO has DateTime field. Re-trigger: `POST /ssot/data-streams/{name}/actions/run` |
+| `NONE` | any | Not yet triggered — trigger now: `POST /ssot/data-streams/{name}/actions/run` |
+| `PROCESSING` | 0 | Wait max 10 min. If still 0 → re-trigger run |
+| `PROCESSING` | > 10 min | Re-trigger: `POST /ssot/data-streams/{name}/actions/run` |
+| `FAILED` | any | **Read the error message.** Common causes: |
+| | | → `CATEGORY_MISMATCH` — stream category (Engagement/Other) doesn't match DMO. Fix category in the stream config and re-upload. |
+| | | → `MISSING_EVENT_DATETIME` — Engagement DLO has no DateTime field. Fix: add `eventDateTimeFieldName` to stream definition. |
+| | | → `DUPLICATE_KEY` — PK collision. Fix: re-generate CSVs with fresh UUIDs and re-upload. |
+| | | → Unknown error — show the SE the exact error body and stop. |
+
 ```python
+# Correct trigger endpoint (not /trigger-refresh, not /trigger — both 404):
 POST /ssot/data-streams/{name}/actions/run?dataspace=default
-# NOT /actions/trigger-refresh → 404
-# NOT /actions/trigger → 404
-# CORRECT endpoint: /actions/run → 201 {"success": true}
+# Returns: 201 {"success": true}
 ```
 
-Only continue to Step 6a when ALL streams show rows.
+**Max retries:** trigger at most 2 times. If a stream is still FAILED after 2 triggers, show the SE the full error message and do not proceed.
+
+Only continue to Step 6a when ALL streams show `lastRunStatus=SUCCESS` AND `totalRows > 0`.
 
 ---
 
@@ -547,6 +588,17 @@ Expected output:
 ✅  ssot__WebsiteEngagement__dlm  extended with PageCategory__c, EventType__c, DurationSeconds__c
 ✅  ssot__EmailEngagement__dlm    extended with OpenedCount__c, ClickedCount__c, UnsubscribedCount__c, CampaignId__c
 ```
+
+**Active recovery for DMO creation errors:**
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `409 DUPLICATE` | DMO already exists | Treat as success — skip, continue |
+| `500 UNKNOWN_EXCEPTION` with `category` | Used `"Other"` instead of `"OTHER"` | Fix casing in script, re-run |
+| `500 UNKNOWN_EXCEPTION` with `dataSpaceName` | Wrong key (e.g. `dataspaceName`) | Fix key spelling: `dataSpaceName` with capital N |
+| `400 INVALID_API_NAME` | Name has spaces, special chars, or > 40 chars | Sanitize: PascalCase, strip non-alphanumeric, truncate to 40 chars before `__dlm` |
+| `400` on field POST | Field name invalid or type unsupported | Log the field name + error, skip that field, continue with remaining fields |
+| `409` on field POST | Field already exists on DMO | Treat as success — idempotent |
 
 ---
 
@@ -583,7 +635,24 @@ Expected output (B2B — food_b2b / hightech):
 ✅  <Slug>_Web_Engagement → ssot__WebsiteEngagement__dlm           9 fields (6 standard + 3 custom)
 ```
 
-If mapping returns error about Boolean fields → see GOTCHAS: Number alias fix.
+**Active recovery for mapping errors:**
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `409 DUPLICATE` | Mapping already exists | Treat as success — idempotent, continue |
+| `404` on stream name | Stream not found (wrong name) | Check stream was created in Step 5. Verify exact name via `GET /ssot/data-streams?dataspace=default`. Fix name and re-run |
+| `400 FIELD_NOT_FOUND` on DMO field | Field doesn't exist on target DMO | Check DMO was created (Step 6a). Verify field names via `GET /ssot/data-model-objects/{dmo}/fields`. If field missing → re-run `create_dmos.py` first |
+| `400 BOOLEAN_NOT_SUPPORTED` | Boolean CSV field mapped to Boolean DMO type | DMO Boolean fields must be declared as `Number` (0/1). Delete and recreate the DMO field as Number type, then re-map |
+| `400` with `fieldMapping` vs `fieldMappings` | Wrong body key | Use `fieldMapping` (singular) — platform rejects plural |
+| Any 5xx | Platform error | Wait 60s, retry once. If repeats, note the stream name and continue with others |
+
+After `create_mappings.py` completes, verify no unmapped streams remain:
+```bash
+# Quick check — any stream without a mapping will be invisible in Segment Builder
+GET /ssot/data-streams?dataspace=default
+# For each stream, verify a mapping exists via:
+GET /ssot/field-mappings?dataspace=default&dloApiName=<StreamName>
+```
 
 ---
 
@@ -646,6 +715,23 @@ Expected output:
 ✅  5/5 relationships ACTIVE
 ```
 
+**Active recovery for relationship errors:**
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `409 DUPLICATE` | Relationship already exists | Treat as success — idempotent, continue |
+| `400 DMO_NOT_FOUND` | DMO doesn't exist yet | Run Step 6a first. Verify DMO via `GET /ssot/data-model-objects?dataspace=default` |
+| `400 FIELD_NOT_FOUND` on FK field | `PartyId__c` not on the DMO | Check field was created in Step 6a. Add it manually if missing |
+| Relationship created as `INACTIVE` | Wrong direction (parent→child) | **Delete immediately**: `DELETE /ssot/data-model-objects/{dmo}/relationships/{id}` then recreate with correct direction (child→parent) |
+| Relationship created but not visible in Segment Builder | Standard DMO relationship already registered by Salesforce | Expected — skip, it's already there |
+
+After Step 6c, verify all relationships are `ACTIVE` (not `INACTIVE`):
+```python
+GET /ssot/data-model-objects/{dmo}/relationships?dataspace=default
+# status must be "ACTIVE" for Segment Builder traversal to work
+# "INACTIVE" → wrong direction → delete and recreate
+```
+
 ---
 
 ### STEP 6d — Identity Resolution
@@ -706,6 +792,17 @@ Expected success output:
 ✅  GATE PASSED — safe to proceed to Step 6e (create CIs)
      UnifiedssotIndividualRt__dlm is populated.
 ```
+
+**Active recovery — do not wait indefinitely:**
+
+| IR status | Wait time | Action |
+|-----------|-----------|--------|
+| `RUNNING` | < 40 min | Keep polling every 30s |
+| `RUNNING` | > 40 min | Something is stuck. Trigger again: `POST /ssot/identity-resolutions/{id}/actions/run-now`. Wait another 20 min. |
+| `RUNNING` | > 60 min | IR is frozen. Tell the SE to cancel from UI (Setup → Identity Resolution → Cancel), then re-trigger via script. |
+| `COMPLETED` | — | Check `UnifiedLinkssotIndividualRt__dlm` has rows before proceeding |
+| `FAILED` | — | Read the failure reason. Re-trigger once. If fails again → show the SE the error and ask them to check the IR ruleset configuration in Data Cloud Setup |
+| `COMPLETED` but 0 unified profiles | — | Email field may be empty in contacts.csv. Verify: `SELECT COUNT(*) FROM UnifiedssotIndividualRt__dlm`. If 0 → check mapping of `email` → `ssot__EmailAddress__c` was successful in Step 6b |
 
 Only proceed to Step 6e when `verify_ir.py` exits with code 0.
 
@@ -789,6 +886,18 @@ POST /ssot/calculated-insights/{apiName}/actions/run?dataspace=default
 # Returns: {"success": true}  or  ALREADY_IN_PROCESS  (both fine)
 ```
 
+**Active recovery for CI creation errors:**
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `409 DUPLICATE` | CI already exists | Trigger run-now on existing CI, treat as success |
+| `400 INVALID_SQL` / `SQL_PARSE_ERROR` | SQL syntax error | Read the error message — it says the exact line/token. Fix the SQL expression in `create_calculated_insights.py` and re-create. Common issues: missing `__c` on aliases, ambiguous column names, unsupported functions |
+| `400 DMO_NOT_FOUND` in SQL | DMO name wrong in query | Check actual DMO name via `GET /ssot/data-model-objects?dataspace=default`. Fix name in SQL |
+| `400 FIELD_NOT_FOUND` in SQL | Field doesn't exist on that DMO | Verify field via `GET /ssot/data-model-objects/{dmo}/fields`. Remove or fix the field reference |
+| `400 INVALID_API_NAME` | `apiName` missing `__cio` suffix | Append `__cio` to the CI name |
+| `400` with `dimensions`/`measures` | These keys must not be in POST body | Remove them — platform derives them from SQL |
+| CI created but status `ERROR` | SQL runs but produces an error at runtime | Check via `GET /ssot/calculated-insights/{name}?dataspace=default`. Read `lastRunStatus` error detail. Usually a join that returns 0 rows due to IR not being complete |
+
 ---
 
 ### STEP 6e3 — Verify CIs have data ← GATE
@@ -864,12 +973,30 @@ Body: {"sql": "SELECT PartyId__c FROM WholesaleOrder__dlm LIMIT 3"}
 # SourceRecordId__c must equal the contact_id UUIDs from gen_data.py
 ```
 
-If CIs still have 0 rows after re-triggering → check data consistency. The `contact_id` in
-transactional CSVs must exactly match the `id` values in `contacts.csv`. If they were generated
-in different runs (different random seeds), they will not match. Solution: regenerate all CSVs
-together in a single `gen_data.py` run.
+**Active recovery sequence for CI with 0 rows — follow this exact order:**
 
-Only proceed to segments when at least 1 CI has data (cnt > 0).
+```
+Attempt 1: Re-trigger run-now → wait 5 min → check count
+  → If > 0: done ✅
+  → If still 0: go to Attempt 2
+
+Attempt 2: Verify UnifiedLink has rows (queries above)
+  → If UnifiedLink = 0: IR didn't complete. Re-run verify_ir.py, wait for completion, then re-trigger CI.
+  → If UnifiedLink > 0 but PartyId format differs: IDs mismatch (different gen runs). Regenerate ALL CSVs together and re-upload. Then repeat from Step 5b.
+  → If UnifiedLink > 0 and formats match: go to Attempt 3
+
+Attempt 3: Check CI SQL for issues
+  → Run SQL query manually via POST /ssot/query with a simplified version of the CI SELECT
+  → If SQL returns 0: join condition is broken. Recheck PartyId__c field name in DMO.
+  → If SQL returns rows: CI SQL is fine but CI is not picking it up. Delete CI and recreate.
+
+After 3 attempts with no rows: STOP. Tell the SE:
+  - What you verified (UnifiedLink count, format comparison, manual SQL result)
+  - What the likely root cause is
+  - What they need to check manually in Data Cloud
+```
+
+Only proceed to segments when **all** CIs have data (cnt > 0). Do not proceed with even one CI at 0.
 
 ---
 
@@ -909,10 +1036,44 @@ Expected output:
 ✅  <Slug>_DormantMultiPolicy        ~700 members
 ```
 
-If a segment shows 0 or ~15 members → DO NOT mark as done. Diagnose:
-1. Check the CI it depends on has rows (`SELECT COUNT(*) FROM <CI>`)
-2. Check the DMO it filters on has rows with the correct PartyId__c values
-3. Check no Engagement DLO is used for transactional data
+**Active recovery for segments with 0 or ~15 members — never accept either:**
+
+**Case A: ~15 members (any segment returning exactly ~15)**
+This is a platform broken state — the relationship direction is wrong or the CI dimension field doesn't match the segment DMO.
+```
+1. Delete the segment: DELETE /ssot/segments/{id}?dataspace=default
+2. Verify relationship direction is child→parent (not parent→child)
+3. Verify CI dimension alias matches segmentOnApiName:
+   - B2C: CI must have `unified_individual__c` dimension → segments on UnifiedssotIndividualRt__dlm
+   - B2B: CI must have `unified_account__c` dimension → segments on UnifiedssotAccountRt__dlm
+4. Recreate the segment with the same criteria
+```
+
+**Case B: 0 members (segment created but empty)**
+Follow this auto-retry sequence — do not ask the SE, just execute:
+```
+Attempt 1: Re-check CI has rows. If CI is now populated, retry the segment as-is.
+  → memberCount > 0: ✅ done
+
+Attempt 2: Relax the threshold by 20%
+  Example: churn_score >= 65  →  churn_score >= 52
+  Example: total_visits >= 8  →  total_visits >= 6
+  Example: days_since_last_purchase >= 90  →  days_since_last_purchase >= 72
+  Delete the 0-member segment, create with relaxed threshold.
+  → memberCount > 0: ✅ done, note the adjusted threshold to SE
+
+Attempt 3: Relax by another 20% (cumulative 36% from original)
+  → memberCount > 0: ✅ done, note the final threshold to SE
+
+After 3 attempts still 0: STOP and diagnose:
+  - Run: SELECT COUNT(*) FROM <TargetCI> WHERE <field> >= <your threshold>
+  - If query returns 0: the field distribution in the data doesn't reach that value at all.
+    Fix: use a percentile-based threshold (median of the field), then recreate.
+  - If query returns > 0 but segment is empty: segment engine is lagging. 
+    Wait 2 min, trigger population count, check again.
+```
+
+**Minimum acceptable count:** any segment with N=10,000 profiles should have > 50 members. Segments with 1–50 members are suspicious — relax the threshold further.
 
 ---
 
