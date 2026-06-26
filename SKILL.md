@@ -540,6 +540,11 @@ Show the script output. Confirm:
 
 **S3 uploads are blocked in the Claude sandbox. This step MUST run in the user's terminal.**
 
+> ℹ️ **About S3:** the upload script uses Salesforce's internal file storage (Salesforce Drive),
+> which routes through AWS S3 presigned URLs automatically. The SE does **not** need their own
+> AWS account — this is part of every licensed Data Cloud org. If the upload fails with a 403 or
+> "presigned URL" error, the org may not have Data Cloud properly provisioned.
+
 Say:
 > 📤 The upload step needs to run in **your terminal** because it makes S3 presigned-URL calls.
 >

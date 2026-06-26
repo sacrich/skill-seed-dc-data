@@ -12,10 +12,18 @@ Salesforce Data Cloud in one session. Supports 18 verticals.
 | [Claude Code](https://claude.ai/code) | latest | `npm install -g @anthropic-ai/claude-code` |
 | [Salesforce CLI](https://developer.salesforce.com/tools/salesforcecli) | ≥ 2.x | `npm install -g @salesforce/cli` |
 | Python | ≥ 3.9 | [python.org](https://www.python.org/downloads/) |
-| Python `requests` | any | `pip3 install requests` |
 
-The target org must have **Salesforce Data Cloud** provisioned and at least one Data Stream
-ingestion credential (S3 or direct upload).
+No extra Python packages needed — scripts use the standard library only.
+
+### Org requirements
+
+The target org must have **Salesforce Data Cloud provisioned and licensed**.
+The upload step (`upload_and_stream.py`) uses Salesforce's internal file storage (Salesforce Drive),
+which routes through S3 presigned URLs automatically — **you do not need your own AWS account**.
+This works on any properly licensed Data Cloud org (Storm / Hyperforce instances).
+
+> **Verify before starting:** run `preflight.py` (see below) to confirm the org has Data Cloud
+> accessible before going through the full wizard.
 
 ---
 
@@ -33,6 +41,23 @@ git clone git@github.com:sacrich/skill-seed-dc-data.git \
 ```bash
 sf org login web --alias <demo-org>
 sf org display --target-org <demo-org>   # verify it works
+```
+
+## Pre-flight check (recommended before every new demo)
+
+Verifies Python version, sf CLI version, org authentication, and Data Cloud access in one shot:
+
+```bash
+python3 ~/.claude/skills/skill-seed-dc-data/scripts/preflight.py --alias <demo-org>
+```
+
+Expected output:
+```
+✅  Python 3.11.x (OK)
+✅  Salesforce CLI 2.x.x (OK)
+✅  Org 'demo-clalit' authenticated: se@demo.com (https://clalit.my.salesforce.com)
+✅  Data Cloud API accessible
+✅  All checks passed — ready to seed.
 ```
 
 ---
@@ -80,7 +105,10 @@ media · automotive · real_estate · betting
 | Symptom | Fix |
 |---------|-----|
 | `sf` not found | `npm install -g @salesforce/cli` |
-| `ModuleNotFoundError: requests` | `pip3 install requests` |
+| `sf` version < 2.x | `npm install -g @salesforce/cli` (upgrades in place) |
 | Org auth expired | `sf org login web --alias <demo-org>` |
-| Segments show 0 members | IR not yet completed — wait and re-run `create_segments.py` |
+| Upload fails with `presigned URL` error | Re-run immediately — S3 URLs expire in ~15 min |
+| Upload fails with `403` | Org may not have Data Cloud licensed — run `preflight.py` |
+| Segments show 0 members | IR not yet completed — wizard auto-retries, or re-run `create_segments.py` |
 | CI has no data | IR must finish before CIs compute — wizard gates this automatically |
+| `permission denied (publickey)` on git clone | Use HTTPS: `git clone https://github.com/sacrich/skill-seed-dc-data.git ...` |
