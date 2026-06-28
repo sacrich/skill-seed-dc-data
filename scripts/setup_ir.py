@@ -79,6 +79,11 @@ def post_account_ruleset(core_url: str, token: str, label: str,
     """
     body = {
         "label": label,
+        # rulesetId is REQUIRED for account IR (optional for individual).
+        # It is appended to generated unified DMO names:
+        #   UnifiedssotAccountRt__dlm, UnifiedLinkssotAccountRt__dlm, etc.
+        # B2B CIs and relationships reference these exact names — do not change.
+        "rulesetId": "Rt",
         "description": "Match B2B accounts by company name and email address. "
                         "Account and ContactPointEmail entities reconciled.",
         "configurationType": "account",
@@ -146,6 +151,15 @@ def is_limit_error(resp) -> bool:
         "MAX_RULESETS", "MAXIMUM RULESETS", "REACHED THE MAXIMUM",
         "TOO MANY", "EXCEEDED THE LIMIT",
     ))
+
+
+def is_account_ir_unsupported(resp) -> bool:
+    """Return True if the org does not support account-type IR.
+
+    Salesforce emits a literal '${suffix}' in the error message when the
+    account IR feature is not enabled/provisioned on the org.
+    """
+    return "${suffix}" in json.dumps(resp)
 
 
 def print_ruleset_table(rulesets: list) -> None:
@@ -429,6 +443,18 @@ def main():
         structural_left -= 1
         if structural_left <= 0:
             break
+
+        # CASE B0: rulesetId collision — API returned literal '${suffix}' in error message.
+        # This means account IR requires an explicit rulesetId in the POST body.
+        # This should not happen now that we always send "rulesetId": "Rt".
+        if b2b_account and is_account_ir_unsupported(resp):
+            print(f"\n  ❌  ACCOUNT IR RULESET ID CONFLICT")
+            print(f"  The org returned: Ruleset ID '${{suffix}}' is already in use.")
+            print(f"  A ruleset with rulesetId='Rt' may already exist (not visible in the API list).")
+            print(f"\n  How to fix:")
+            print(f"    Delete the existing account IR in Data Cloud Setup UI, then re-run:")
+            print(f"      Data Cloud → Connect & Unify → Identity Resolution → (Account ruleset) → Delete")
+            sys.exit(4)  # exit code 4 = rulesetId conflict
 
         # CASE B: org limit reached — surface it clearly and exit
         if is_limit_error(resp):
