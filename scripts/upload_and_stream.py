@@ -180,6 +180,27 @@ EVENT_DATE_MAP = {
     "parcels":              "ship_datetime",
 }
 
+# Display label inserted into stream names for each industry vertical.
+INDUSTRY_LABEL = {
+    "insurance":   "Insurance",  "banking":     "Banking",
+    "food":        "Food",       "food_b2b":    "Food",
+    "retail":      "Retail",     "pharma":      "Pharma",
+    "telco":       "Telco",      "hightech":    "Hightech",
+    "utilities":   "Utilities",  "airlines":    "Airlines",
+    "healthcare":  "Healthcare", "sports_club": "SportsClub",
+    "ecommerce":   "Ecommerce",  "hospitality": "Hospitality",
+    "media":       "Media",      "automotive":  "Automotive",
+    "real_estate": "RealEstate", "betting":     "Betting",
+    "postal":      "Postal",
+}
+
+# Industries whose CSV stems use a short abbreviation (e.g. ht_subscriptions).
+# Value = the abbreviation prefix to strip and replace with INDUSTRY_LABEL.
+INDUSTRY_STEM_ABBREV = {"hightech": "ht"}
+
+# Standard stems present in every vertical — get the industry label prepended.
+STANDARD_STEMS = {"contacts", "contact_emails", "email_engagement", "web_engagement"}
+
 
 def infer_schema(csv_path: Path, pk_col: str = None) -> list:
     """Return [(name, dataType, isPrimaryKey), ...] inferred from CSV header + sample."""
@@ -534,13 +555,22 @@ def main():
                 return mapping[prefix_key]
         return default
 
-    b2b = cfg.get("b2b", False)
+    b2b      = cfg.get("b2b", False)
+    industry = cfg.get("industry", "")
+    ind_label  = INDUSTRY_LABEL.get(industry, industry.title().replace("_", ""))
+    ind_abbrev = INDUSTRY_STEM_ABBREV.get(industry)
     B2B_STEM_RENAME = {"contacts": "accounts", "contact_emails": "account_emails"}
 
     results = []
     for csv_path in csvs:
-        stem = csv_path.stem  # e.g. "contacts" or "insurance_policies_2025_2026"
-        display_stem = B2B_STEM_RENAME.get(stem, stem) if b2b else stem
+        stem = csv_path.stem  # e.g. "contacts" or "ht_subscriptions"
+        if stem in STANDARD_STEMS:
+            base = B2B_STEM_RENAME.get(stem, stem) if b2b else stem
+            display_stem = f"{ind_label}_{base}"
+        elif ind_abbrev and stem.startswith(f"{ind_abbrev}_"):
+            display_stem = f"{ind_label}_{stem[len(ind_abbrev)+1:]}"
+        else:
+            display_stem = stem
         stream_name  = f"{prefix}_{display_stem.replace('_', ' ').title().replace(' ', '_')}"
         stream_label = f"{cfg.get('clientName', prefix)} {display_stem.replace('_', ' ').title()}"
         category     = resolve_map(CATEGORY_MAP, stem, "Profile")

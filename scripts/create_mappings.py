@@ -52,6 +52,42 @@ from _auth import get_tokens, api  # noqa: E402
 API_V = "v62.0"
 BASE = f"/services/data/{API_V}/ssot"
 
+# ─── industry stream-name helpers ────────────────────────────────────────────
+# Must stay in sync with upload_and_stream.py INDUSTRY_LABEL / INDUSTRY_STEM_ABBREV.
+INDUSTRY_LABEL = {
+    "insurance":   "Insurance",  "banking":     "Banking",
+    "food":        "Food",       "food_b2b":    "Food",
+    "retail":      "Retail",     "pharma":      "Pharma",
+    "telco":       "Telco",      "hightech":    "Hightech",
+    "utilities":   "Utilities",  "airlines":    "Airlines",
+    "healthcare":  "Healthcare", "sports_club": "SportsClub",
+    "ecommerce":   "Ecommerce",  "hospitality": "Hospitality",
+    "media":       "Media",      "automotive":  "Automotive",
+    "real_estate": "RealEstate", "betting":     "Betting",
+    "postal":      "Postal",
+}
+INDUSTRY_STEM_ABBREV = {"hightech": "ht"}
+# Suffixes that come from standard (non-industry-specific) streams and need the
+# industry label prepended to match what upload_and_stream.py produces.
+STANDARD_DLO_SUFFIXES = {
+    "Contacts", "Contact_Emails",       # B2C
+    "Accounts", "Account_Emails",       # B2B (renamed by upload_and_stream)
+    "Email_Engagement", "Web_Engagement",
+}
+
+
+def _effective_suffix(dlo_suffix: str, industry: str, ind_label: str) -> str:
+    """Return the full stream-name suffix that upload_and_stream.py will have used."""
+    if dlo_suffix in STANDARD_DLO_SUFFIXES:
+        return f"{ind_label}_{dlo_suffix}"
+    abbrev = INDUSTRY_STEM_ABBREV.get(industry)
+    if abbrev:
+        abbrev_title = abbrev.title()  # "ht" → "Ht"
+        if dlo_suffix.startswith(f"{abbrev_title}_"):
+            return f"{ind_label}_{dlo_suffix[len(abbrev_title)+1:]}"
+    return dlo_suffix
+
+
 # ─── mapping specs ───────────────────────────────────────────────────────────
 # Each entry: (dlo_suffix, dmo_name, [(dlo_field, dmo_field), ...])
 # dlo_suffix = the stream name suffix (e.g. "Contacts" → <Prefix>_Contacts)
@@ -996,7 +1032,8 @@ def main():
     cfg = json.loads(Path(args.config).read_text())
     alias = cfg["orgAlias"]
     slug = cfg.get("clientSlug", "client")
-    industry = cfg.get("industry", "insurance").lower()
+    industry  = cfg.get("industry", "insurance").lower()
+    ind_label = INDUSTRY_LABEL.get(industry, industry.title().replace("_", ""))
     # Stream name prefix — must match what upload_and_stream.py used
     prefix = slug.replace("-", "_").title().replace("_", "")  # e.g. Migdal
 
@@ -1028,7 +1065,7 @@ def main():
 
     results = []
     for dlo_suffix, dmo_name, field_pairs in all_mappings:
-        stream_name = f"{prefix}_{dlo_suffix}"
+        stream_name = f"{prefix}_{_effective_suffix(dlo_suffix, industry, ind_label)}"
 
         # Resolve actual DLO API name from the stream list
         dlo_api_name = dlos.get(stream_name)
