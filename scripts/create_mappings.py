@@ -839,11 +839,12 @@ def list_dlos(core_url: str, token: str) -> dict[str, str]:
     return result
 
 
-def existing_mappings(core_url: str, token: str, dmos: list = None) -> set:
-    """Return set of (sourceEntityDeveloperName, targetEntityDeveloperName) already mapped.
+def existing_mappings(core_url: str, token: str, dmos: list = None) -> dict:
+    """Return dict of (sourceEntityDeveloperName, targetEntityDeveloperName) → developerName.
 
     The GET endpoint requires ?dmoDeveloperName=X to filter — no unfiltered list.
     We query each DMO we plan to map to.
+    dict supports `in` for key lookup (same as set) AND lets --force-remap delete by developerName.
     """
     ALL_DMOS = [
         "ssot__Individual__dlm",
@@ -874,7 +875,7 @@ def existing_mappings(core_url: str, token: str, dmos: list = None) -> set:
         "PropertyInquiry__dlm", "PropertyTransaction__dlm",
         "BettingAccount__dlm", "BettingTransaction__dlm",
     ]
-    pairs = set()
+    pairs = {}
     for dmo in (dmos or ALL_DMOS):
         st, data = api(core_url, token, "GET",
                        f"{BASE}/data-model-object-mappings"
@@ -884,9 +885,50 @@ def existing_mappings(core_url: str, token: str, dmos: list = None) -> set:
         for m in data.get("objectSourceTargetMaps", []):
             src = m.get("sourceEntityDeveloperName", "")
             tgt = m.get("targetEntityDeveloperName", "")
+            name = m.get("developerName", "")
+            # fieldMappings (plural) is what GET returns; fieldMapping (singular) is what POST/PATCH uses
+            existing_fields = [
+                (fm.get("sourceFieldDeveloperName", ""), fm.get("targetFieldDeveloperName", ""))
+                for fm in m.get("fieldMappings", [])
+            ]
             if src and tgt:
-                pairs.add((src, tgt))
+                pairs[(src, tgt)] = {"developerName": name, "existingFields": existing_fields}
     return pairs
+
+
+def patch_mapping_fields(core_url: str, token: str, mapping_name: str,
+                         new_field_pairs: list, existing_field_pairs: list) -> tuple:
+    """PATCH an existing DLO→DMO mapping to add missing field mappings.
+
+    Safe: does NOT delete the mapping. Adds only the field rows that are not already present.
+    IR, CIs, and Segments built on top of this mapping remain untouched.
+
+    Endpoint: PATCH /ssot/data-model-object-mappings/{developerName}?dataspace=default
+    Body: same format as POST but includes ALL field rows (existing + new).
+
+    Returns (added_count, already_present_count, error_msg_or_None).
+    """
+    # Determine which fields are already mapped (by target field name)
+    already = {tgt for _, tgt in existing_field_pairs}
+    to_add = [(src, tgt) for src, tgt in new_field_pairs if tgt not in already]
+    if not to_add:
+        return 0, len(already), None
+
+    # PATCH body = full merged list (existing + new additions)
+    all_pairs = list(existing_field_pairs) + to_add
+    body = {
+        "fieldMapping": [
+            {"sourceFieldDeveloperName": f"{src}__c" if not src.endswith("__c") else src,
+             "targetFieldDeveloperName": tgt}
+            for src, tgt in all_pairs
+        ]
+    }
+    st, resp = api(core_url, token, "PATCH",
+                   f"{BASE}/data-model-object-mappings/{mapping_name}?dataspace=default",
+                   body)
+    if st in (200, 201):
+        return len(to_add), len(already), None
+    return 0, len(already), f"HTTP {st}: {str(resp)[:120]}"
 
 
 def post_mapping(core_url: str, token: str,
@@ -919,6 +961,16 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default="config.json")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument(
+        "--update-fields", action="store_true",
+        help=(
+            "PATCH existing mappings to add missing field mappings. "
+            "Use when new fields were added to a DMO (e.g. enrichment fields on ssot__Individual__dlm) "
+            "AFTER the original mapping was created. "
+            "Safe: does NOT delete the mapping — IR, CIs, and Segments are untouched. "
+            "Follow up with upload_and_stream.py to re-stream source CSVs with the new field values."
+        ),
+    )
     args = ap.parse_args()
 
     cfg = json.loads(Path(args.config).read_text())
@@ -973,8 +1025,29 @@ def main():
 
         # Idempotency check: (dlo_dll_name, dmo_name) pair
         if (dlo_api_name, dmo_name) in existing:
-            print(f"  ↩  {stream_name} → {dmo_name}  (already mapped)")
-            results.append({"stream": stream_name, "dmo": dmo_name, "status": "existing"})
+            if args.update_fields:
+                info = existing[(dlo_api_name, dmo_name)]
+                mapping_name = info["developerName"]
+                current_fields = info["existingFields"]
+                if args.dry_run:
+                    missing = [tgt for _, tgt in field_pairs if tgt not in {t for _, t in current_fields}]
+                    print(f"  ↕  {stream_name} → {dmo_name}  [dry-run] would add {len(missing)} fields: {missing}")
+                    results.append({"stream": stream_name, "dmo": dmo_name, "status": "dry-run-update"})
+                    continue
+                added, present, err = patch_mapping_fields(
+                    core_url, core_token, mapping_name, field_pairs, current_fields)
+                if err:
+                    print(f"  ⚠️  {stream_name} → {dmo_name}  PATCH failed: {err}")
+                    results.append({"stream": stream_name, "dmo": dmo_name, "status": "patch-failed"})
+                elif added == 0:
+                    print(f"  ↩  {stream_name} → {dmo_name}  (all {present} fields already mapped)")
+                    results.append({"stream": stream_name, "dmo": dmo_name, "status": "existing"})
+                else:
+                    print(f"  ✚  {stream_name} → {dmo_name}  +{added} fields added ({present} already present)")
+                    results.append({"stream": stream_name, "dmo": dmo_name, "status": "updated", "added": added})
+            else:
+                print(f"  ↩  {stream_name} → {dmo_name}  (already mapped)")
+                results.append({"stream": stream_name, "dmo": dmo_name, "status": "existing"})
             continue
 
         print(f"  →  {stream_name} → {dmo_name} ...", end=" ", flush=True)
@@ -1005,7 +1078,7 @@ def main():
 
         time.sleep(0.3)
 
-    ok = sum(1 for r in results if r["status"] in ("created", "existing", "duplicate"))
+    ok = sum(1 for r in results if r["status"] in ("created", "existing", "duplicate", "updated"))
     print(f"\n✅  {ok}/{len(results)} mappings OK")
     if any(r["status"].startswith("error") for r in results):
         print("  ⚠️  Some mappings failed — check Data Cloud Setup → Data Model")
