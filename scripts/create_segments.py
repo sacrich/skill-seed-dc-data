@@ -2965,8 +2965,12 @@ def main():
             "publishScheduleStartDateTime": start_dt,
             "publishScheduleEndDate":     end_dt,
             "includeCriteria":            crit_str,
-            "excludeCriteria":            excl_str,
         }
+        # Only include excludeCriteria when non-empty.
+        # Sending '{}' or an empty LogicalComparison causes parse errors or ERROR status.
+        # Omitting the field entirely lets the API default to no-exclude.
+        if seg.get("excludeCriteria"):
+            body["excludeCriteria"] = excl_str
 
         if existing:
             msid     = existing.get("marketSegmentId")
