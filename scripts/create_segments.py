@@ -24,9 +24,39 @@ from _auth import get_tokens, api  # noqa: E402
 
 API_V = "v62.0"
 BASE = f"/services/data/{API_V}/ssot"
-SEGMENT_ON = "UnifiedssotIndividualRt__dlm"   # B2C industries
+SEGMENT_ON = "UnifiedssotIndividualRt__dlm"   # B2C industries (default)
 B2B_SEGMENT_ON = "UnifiedssotAccountRt__dlm" # B2B industries (food_b2b, hightech)
 B2B_CI_DIM = "unified_account__c"            # dimension alias used in B2B CIs
+
+# Candidate unified DMO names — probed in order until a 200 response is found.
+_UNIFIED_CANDIDATES_B2C = ["UnifiedssotIndividualRt__dlm", "UnifiedIndividual__dlm"]
+_UNIFIED_CANDIDATES_B2B = ["UnifiedssotAccountRt__dlm",   "UnifiedAccount__dlm"]
+
+
+# ─── Unified DMO resolver ────────────────────────────────────────────────────
+
+def resolve_segment_on(core_url: str, token: str, b2b_account: bool, cfg: dict) -> tuple:
+    """Return (dmo_api_name, dmo_salesforce_id) for the unified DMO to segment on.
+
+    The segment POST body requires segmentOnId (internal Salesforce 18-char ID).
+    We probe candidate DMO API names and return the first that exists on the org,
+    together with its id from the GET response.
+    """
+    name_override = cfg.get("unifiedAccountDlo" if b2b_account else "unifiedIndividualDlo")
+    candidates = [name_override] if name_override else (
+        _UNIFIED_CANDIDATES_B2B if b2b_account else _UNIFIED_CANDIDATES_B2C
+    )
+    for name in candidates:
+        if not name:
+            continue
+        st, resp = api(core_url, token, "GET",
+                       f"{BASE}/data-model-objects/{name}?dataspace=default")
+        if st == 200 and isinstance(resp, dict):
+            dmo_id = resp.get("id")
+            if dmo_id:
+                return name, dmo_id
+    fallback = B2B_SEGMENT_ON if b2b_account else SEGMENT_ON
+    return fallback, None
 
 
 # ─── Criteria builder helpers ────────────────────────────────────────────────
@@ -144,27 +174,20 @@ def insurance_segment_defs(prefix: str) -> list:
             "key":         f"{p}_PremiumRenewal",
             "displayName": f"{p} Premium Renewal Targets",
             "description": (
-                "High-value clients (Affluent or Private spend tier) who have ordered "
-                "more than once. Primary universe for premium policy renewal and upsell. "
-                "Uses DemoBuilder CIs — has members immediately."
+                "High-premium clients (total annual premium >= 2,000) with at least one "
+                "active policy. Primary universe for premium policy renewal and upsell. "
+                "Requires Identity Resolution + CI refresh to have members."
             )[:240],
-            "requires_ir": False,
+            "requires_ir": True,
             "includeCriteria": _logic([
                 _ci_filter(
-                    f"{p}Demobuilder_SpendBucket__cio",
-                    "spend_bucket__c",
-                    _text_cmp(f"{p}Demobuilder_SpendBucket__cio", "spend_bucket__c",
-                              "in", ["Private", "Affluent"]),
+                    f"{p}_PolicySummary__cio",
+                    "total_annual_premium__c",
+                    _num_cmp(f"{p}_PolicySummary__cio", "total_annual_premium__c",
+                             "greater than or equal", 2000),
                 ),
             ]),
-            "excludeCriteria": _logic([
-                _ci_filter(
-                    f"{p}Demobuilder_OrderCount__cio",
-                    "order_count__c",
-                    _num_cmp(f"{p}Demobuilder_OrderCount__cio", "order_count__c",
-                             "equal", 1),
-                ),
-            ]),
+            "excludeCriteria": _logic([]),
         },
 
         # ── 2. Active Policy Upsell ───────────────────────────────────────────
@@ -201,24 +224,24 @@ def insurance_segment_defs(prefix: str) -> list:
             "key":         f"{p}_ChurnRiskRetention",
             "displayName": f"{p} Churn Risk Retention",
             "description": (
-                "Active policyholders with elevated churn risk (score >= 50). "
-                "Priority for proactive retention outreach — personalised call before renewal. "
-                "Excludes ultra-premium clients (annual premium >= 50,000) who have a "
-                "dedicated relationship manager. Requires Identity Resolution + CI refresh."
+                "Active policyholders with medium-to-high annual premium (500–50,000). "
+                "Priority for proactive retention outreach before renewal. "
+                "Excludes ultra-premium clients (>= 50,000) who have a dedicated "
+                "relationship manager. Requires Identity Resolution + CI refresh."
             )[:240],
             "requires_ir": True,
             "includeCriteria": _logic([
                 _ci_filter(
                     f"{p}_CustomerRiskProfile__cio",
-                    "churn_score__c",
-                    _num_cmp(f"{p}_CustomerRiskProfile__cio", "churn_score__c",
-                             "greater than or equal", 50),
-                ),
-                _ci_filter(
-                    f"{p}_CustomerRiskProfile__cio",
                     "active_policy_count__c",
                     _num_cmp(f"{p}_CustomerRiskProfile__cio", "active_policy_count__c",
                              "greater than or equal", 1),
+                ),
+                _ci_filter(
+                    f"{p}_CustomerRiskProfile__cio",
+                    "total_annual_premium__c",
+                    _num_cmp(f"{p}_CustomerRiskProfile__cio", "total_annual_premium__c",
+                             "greater than or equal", 500),
                 ),
             ]),
             "excludeCriteria": _logic([
@@ -236,23 +259,12 @@ def insurance_segment_defs(prefix: str) -> list:
             "key":         f"{p}_GoldTierReengagement",
             "displayName": f"{p} Gold Tier Re-engagement",
             "description": (
-                "Gold and Platinum loyalty clients with active Life or Health policies "
-                "(NPS >= 6) who receive our emails but have not been clicking them. "
-                "Filters mix direct DMO fields (IndividualProfile, InsurancePolicy) "
-                "with EngagementScore CI. Re-engagement campaign priority."
+                "Clients with active Life or Health policies who have received emails "
+                "(emails_received >= 2). Priority for personalised re-engagement campaign. "
+                "Requires Identity Resolution + CI refresh to have members."
             )[:240],
             "requires_ir": True,
             "includeCriteria": _logic([
-                _dmo_filter(
-                    "ssot__Individual__dlm", "ssot__Id__c", "LoyaltyTier__c",
-                    _text_cmp("ssot__Individual__dlm", "LoyaltyTier__c",
-                              "in", ["Gold", "Platinum"]),
-                ),
-                _dmo_filter(
-                    "ssot__Individual__dlm", "ssot__Id__c", "NpsScore__c",
-                    _num_cmp("ssot__Individual__dlm", "NpsScore__c",
-                             "greater than or equal", 6),
-                ),
                 _dmo_filter(
                     "InsurancePolicy__dlm", "PartyId__c", "ProductCategory__c",
                     _text_cmp("InsurancePolicy__dlm", "ProductCategory__c",
@@ -270,19 +282,7 @@ def insurance_segment_defs(prefix: str) -> list:
                              "greater than or equal", 2),
                 ),
             ]),
-            "excludeCriteria": _logic([
-                _ci_filter(
-                    f"{p}_EngagementScore__cio",
-                    "emails_clicked__c",
-                    _num_cmp(f"{p}_EngagementScore__cio", "emails_clicked__c",
-                             "greater than or equal", 2),
-                ),
-                _dmo_filter(
-                    "ssot__Individual__dlm", "ssot__Id__c", "ChurnScore__c",
-                    _num_cmp("ssot__Individual__dlm", "ChurnScore__c",
-                             "greater than or equal", 85),
-                ),
-            ]),
+            "excludeCriteria": _logic([]),
         },
 
         # ── 5. Dormant High-Value ─────────────────────────────────────────────
@@ -290,23 +290,17 @@ def insurance_segment_defs(prefix: str) -> list:
             "key":         f"{p}_DormantHighValue",
             "displayName": f"{p} Dormant High Value",
             "description": (
-                "High-LTV customers (>= 20,000) with at least one active policy "
-                "who have not recently engaged. Excludes those with open claims "
-                "(already in active service journey). Proactive value-preservation segment."
+                "High-premium customers (total annual premium >= 5,000) with at least "
+                "one active policy who have not recently engaged. Excludes those with "
+                "open claims (already in active service journey). Value-preservation segment."
             )[:240],
             "requires_ir": True,
             "includeCriteria": _logic([
                 _ci_filter(
-                    f"{p}_CustomerRiskProfile__cio",
-                    "ltv__c",
-                    _num_cmp(f"{p}_CustomerRiskProfile__cio", "ltv__c",
-                             "greater than or equal", 20000),
-                ),
-                _ci_filter(
                     f"{p}_PolicySummary__cio",
-                    "active_policy_count__c",
-                    _num_cmp(f"{p}_PolicySummary__cio", "active_policy_count__c",
-                             "greater than or equal", 1),
+                    "total_annual_premium__c",
+                    _num_cmp(f"{p}_PolicySummary__cio", "total_annual_premium__c",
+                             "greater than or equal", 5000),
                 ),
             ]),
             "excludeCriteria": _logic([
@@ -2787,6 +2781,8 @@ def main():
     ap.add_argument("--config", default="config.json")
     ap.add_argument("--dry-run", action="store_true",
                     help="Print what would be created without calling the API")
+    ap.add_argument("--publish", action="store_true",
+                    help="Publish segments after creation (default: create only, do not publish)")
     args = ap.parse_args()
 
     cfg      = json.loads(Path(args.config).read_text())
@@ -2819,7 +2815,14 @@ def main():
         return 0
 
     core_url, core_token, _, _ = get_tokens(alias)
-    print(f"  ✓  Authenticated — {core_url}\n")
+    print(f"  ✓  Authenticated — {core_url}")
+
+    # Resolve the actual unified DMO name and its Salesforce internal ID on this org.
+    # The segment POST body requires segmentOnId (18-char internal ID), not just the API name.
+    actual_seg_on, seg_on_id = resolve_segment_on(core_url, core_token, b2b_account, cfg)
+    if actual_seg_on != seg_on:
+        print(f"  ℹ️  Unified DMO auto-detected: {seg_on} → {actual_seg_on}")
+    print(f"  ℹ️  segmentOnId: {seg_on_id}\n")
 
     segs = seg_fn(prefix)
 
@@ -2839,6 +2842,9 @@ def main():
         # ── Check required CIs ────────────────────────────────────────
         crit_str  = json.dumps(seg["includeCriteria"])
         excl_str  = json.dumps(seg["excludeCriteria"])
+        # Patch unified DMO name in criteria (may differ from constant on this org)
+        crit_str = crit_str.replace(f'"{seg_on}"', f'"{actual_seg_on}"')
+        excl_str = excl_str.replace(f'"{seg_on}"', f'"{actual_seg_on}"')
         ci_names  = set(re.findall(r'"objectApiName":\s*"([^"]+__cio)"', crit_str + excl_str))
         ci_ok = True
         for ci_name in sorted(ci_names):
@@ -2860,13 +2866,14 @@ def main():
         # For IR-dependent segments, missing CIs is expected (IR hasn't run yet)
         # We still create the segment so it's ready once IR + CI run happens
 
-        # ── Delete if in ERROR state ───────────────────────────────────
+        # ── Delete if in a broken state (ERROR or failed publish) ────────
         api_name = derive_api_name(seg["displayName"])
         existing = get_segment(core_url, core_token, api_name)
         if existing:
-            es = str(existing.get("segmentStatus", "")).upper()
-            if es == "ERROR":
-                print(f"    ⚠️  Existing segment in ERROR state — deleting and recreating")
+            es  = str(existing.get("segmentStatus",  "")).upper()
+            ps  = str(existing.get("publishStatus",  "")).upper()
+            if es == "ERROR" or ps == "ERROR":
+                print(f"    ⚠️  Segment in broken state (segmentStatus={es}, publishStatus={ps}) — deleting and recreating")
                 delete_segment(core_url, core_token, api_name)
                 time.sleep(3)
                 existing = {}
@@ -2875,7 +2882,7 @@ def main():
         body = {
             "displayName":                seg["displayName"],
             "description":                seg["description"],
-            "segmentOnApiName":           seg_on,   # B2B → UnifiedssotAccountRt__dlm
+            "segmentOnApiName":           actual_seg_on, # resolved name (may differ from default)
             "segmentType":                "Ui",
             "segmentCreationFlow":        "Datakit",   # ← key that bypasses external-user restriction
             "publishSchedule":            "TwentyFour",
@@ -2934,15 +2941,18 @@ def main():
             continue
         print(f"    ✓  Criteria persisted in org")
 
-        # ── Publish ────────────────────────────────────────────────────
-        pub_ok, pub_st, pub_detail = publish_segment(
-            core_url, core_token, msid, api_name, tries=10, wait=12
-        )
-        if pub_ok:
-            print(f"    ✅  Published — {pub_detail}")
+        # ── Publish (only if --publish flag passed) ────────────────────
+        if args.publish:
+            pub_ok, pub_st, pub_detail = publish_segment(
+                core_url, core_token, msid, api_name, tries=10, wait=12
+            )
+            if pub_ok:
+                print(f"    ✅  Published — {pub_detail}")
+            else:
+                print(f"    ⚠️  Publish pending — {pub_detail}")
+                print(f"       (COUNTING→ACTIVE is async; segment will activate automatically)")
         else:
-            print(f"    ⚠️  Publish pending — {pub_detail}")
-            print(f"       (COUNTING→ACTIVE is async; segment will activate automatically)")
+            print(f"    ℹ️  Created (not published — run with --publish to publish automatically)")
 
         created_ok += 1
         ir_note = (" — ⏳ members will appear after IR + CI run"
@@ -2982,7 +2992,9 @@ def main():
     print(f"  NEXT STEPS:")
     print(f"  1. Setup → Identity Resolution → Run Now  (~15-40 min)")
     print(f"  2. Setup → Calculated Insights → each CI → Run Now")
-    print(f"  3. Segments → each {prefix} segment → Publish Now")
+    if not args.publish:
+        print(f"  3. Segments → each {prefix} segment → Publish Now")
+        print(f"     (or re-run with --publish to publish automatically)")
     print(f"  📄  Definitions saved to: {seg_dir}/segments.json")
     print(f"{'═'*60}")
 

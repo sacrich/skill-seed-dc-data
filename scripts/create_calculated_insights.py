@@ -1894,7 +1894,9 @@ def create_ci(core_url: str, token: str,
     dataSpace is NOT in the body, only in the ?dataspace=default query param.
     """
     import datetime
-    tomorrow = (datetime.date.today() + datetime.timedelta(days=1)).strftime("%Y-%m-%dT00:00")
+    # Use today's date (past midnight) so the publish schedule is already active.
+    # Using tomorrow causes Data Explorer to hide the CI until the schedule kicks in.
+    today_start = datetime.date.today().strftime("%Y-%m-%dT00:00")
 
     body = {
         "apiName":                        api_name,
@@ -1902,7 +1904,7 @@ def create_ci(core_url: str, token: str,
         "description":                    description,
         "definitionType":                 "CALCULATED_METRIC",
         "publishScheduleInterval":        "SIX",
-        "publishScheduleStartDateTime":   tomorrow,
+        "publishScheduleStartDateTime":   today_start,
         "expression":                     sql,
     }
     return api(core_url, token, "POST", f"{BASE}/calculated-insights?dataspace=default", body)
