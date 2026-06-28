@@ -273,11 +273,13 @@ def main():
     slug = cfg.get("clientSlug", "client")
     industry = cfg.get("industry", "insurance").lower()
     client_name = cfg.get("clientName", slug)
-    ruleset_label = f"{client_name} Identity Resolution"
 
     # B2B Account IR: food_b2b and hightech use configurationType="account"
     b2b_account = cfg.get("b2b", False) and industry in ("food_b2b", "hightech")
     ir_config_type = "account" if b2b_account else "individual"
+
+    # Generic label — IR rulesets are shared across the org, not per-client
+    ruleset_label = "Account Identity Resolution" if b2b_account else "Individual Identity Resolution"
     required_dmo = "ssot__Account__dlm" if b2b_account else "ssot__Individual__dlm"
 
     if b2b_account:
@@ -343,8 +345,12 @@ def main():
         print(f"     label='{rs_label}'  id={rs_id}  status={rs_status}")
 
         if rs_status in ("NEW", "DRAFT", "UNPUBLISHED") and not active.get("matchRules"):
-            print(f"  ⚠️  Ruleset has no match rules (empty shell) — creating new one instead")
-            matching = []  # fall through to creation
+            print(f"  ⚠️  Ruleset '{rs_label}' is in {rs_status} with no match rules.")
+            print(f"      Options:")
+            print(f"        A) Delete it in the UI and re-run to create a fresh one.")
+            print(f"        B) Reuse it by ID:  python3 setup_ir.py --config {args.config} --use-id {rs_id}")
+            print_ruleset_table(all_rulesets)
+            sys.exit(3)  # exit code 3 = existing IR found, needs SE decision
         elif rs_status in ("NEW", "DRAFT", "UNPUBLISHED"):
             print(f"  ℹ️  Ruleset is in {rs_status} — publishing now...")
             pub_st, pub_resp = api(core_url, core_token, "PATCH",

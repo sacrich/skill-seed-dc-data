@@ -871,6 +871,14 @@ If script exits with code 2 (limit error) — STOP and show the SE:
 > 1. Delete an existing ruleset: **Data Cloud → Setup → Identity Resolution → (select) → Delete**, then type "IR ready"
 > 2. Reuse an existing ruleset (wrong type — unified profiles will differ): type "reuse IR `<id>`"
 
+If script exits with code 3 (existing ruleset in NEW/DRAFT state, needs decision) — show the SE:
+> ⚠️ There is an existing Identity Resolution ruleset but it's in an incomplete state (NEW/DRAFT).
+> Options:
+> 1. **Reuse it** — type "reuse IR `<id>`" and I'll trigger a run on it
+> 2. **Delete it** in the UI and type "IR deleted" — I'll create a fresh one with the correct match rules
+>
+> Recommendation: if the ruleset has no match rules, delete it and let me create a proper one.
+
 **Important API notes:**
 - IR create endpoint: `POST /ssot/identity-resolutions?dataspace=default`
   (NOT `identity-resolution-rulesets` → 404)
