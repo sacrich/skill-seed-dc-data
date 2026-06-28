@@ -3236,12 +3236,9 @@ def main():
             pub_stat = str(existing.get("publishStatus", "")).upper()
             print(f"    ↩  Already exists (segmentStatus={existing.get('segmentStatus')}, "
                   f"publishStatus={pub_stat})")
-            if pub_stat in ("SUCCESS", "PUBLISHING"):
-                print(f"    ✅  Already published — skipping")
-                created_ok += 1
-                continue
-            # Exists but not published → try to publish
-            print(f"    ▶  Attempting to publish existing segment…")
+            # Always trigger publish on existing segments so new ingested data is included.
+            # (equivalent to "Run Now" for segments)
+            print(f"    ▶  Triggering publish to refresh with latest data…")
         else:
             # Recompute start_dt fresh right before POST (prevents stale future-start issue)
             now2     = datetime.now(timezone.utc)
@@ -3280,8 +3277,10 @@ def main():
             continue
         print(f"    ✓  Criteria persisted in org")
 
-        # ── Publish (only if --publish flag passed) ────────────────────
-        if args.publish:
+        # ── Publish ────────────────────────────────────────────────────────
+        # Existing segments always get Run Now (refresh with new ingested data).
+        # New segments only publish when --publish flag is passed.
+        if existing or args.publish:
             pub_ok, pub_st, pub_detail = publish_segment(
                 core_url, core_token, msid, api_name, tries=10, wait=12
             )
