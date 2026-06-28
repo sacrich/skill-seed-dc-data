@@ -707,7 +707,7 @@ def gen_insurance_claims(contacts: list[dict], policies: list[dict]) -> list[dic
             #  demo CIs more interesting and count-based filters more predictable)
             claim_date = _recent_date(days_back=720)
             claim_dt = datetime.strptime(claim_date, "%Y-%m-%d")
-            status = random.choices(["Approved", "Paid", "Under Review", "Rejected"],
+            status = random.choices(["Approved", "Paid", "Open", "Rejected"],
                                      weights=[0.30, 0.45, 0.15, 0.10])[0]
             resolution_dt = (claim_dt + timedelta(days=random.randint(3, 60))) if status in ("Approved", "Paid", "Rejected") else None
             rows.append({

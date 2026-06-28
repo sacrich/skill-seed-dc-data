@@ -980,12 +980,6 @@ def pharma_segment_defs(prefix: str) -> list:
                     _num_cmp(f"{p}_AdherenceProfile__cio", "adherence_rate__c",
                              "less than or equal", 0.5),
                 ),
-                _ci_filter(
-                    f"{p}_AdherenceProfile__cio",
-                    "active_rx_count__c",
-                    _num_cmp(f"{p}_AdherenceProfile__cio", "active_rx_count__c",
-                             "greater than or equal", 1),
-                ),
             ]),
             "excludeCriteria": _logic([
                 _ci_filter(
@@ -1067,12 +1061,6 @@ def pharma_segment_defs(prefix: str) -> list:
             )[:240],
             "requires_ir": True,
             "includeCriteria": _logic([
-                _ci_filter(
-                    f"{p}_PrescriptionSummary__cio",
-                    "rx_count__c",
-                    _num_cmp(f"{p}_PrescriptionSummary__cio", "rx_count__c",
-                             "greater than or equal", 2),
-                ),
                 _ci_filter(
                     f"{p}_PrescriptionSummary__cio",
                     "active_rx_count__c",
@@ -1397,12 +1385,6 @@ def hightech_segment_defs(prefix: str) -> list:
                     _num_cmp(f"{p}_SupportProfile__cio", "open_ticket_count__c",
                              "greater than or equal", 2),
                 ),
-                _b2b_ci_filter(
-                    f"{p}_SupportProfile__cio",
-                    "critical_ticket_count__c",
-                    _num_cmp(f"{p}_SupportProfile__cio", "critical_ticket_count__c",
-                             "greater than or equal", 1),
-                ),
             ]),
             "excludeCriteria": _logic([
                 _b2b_ci_filter(
@@ -1524,14 +1506,15 @@ def utilities_segment_defs(prefix: str) -> list:
                     _num_cmp(f"{p}_ConsumptionProfile__cio", "electricity_contracts__c",
                              "greater than or equal", 1),
                 ),
+            ]),
+            "excludeCriteria": _logic([
                 _ci_filter(
                     f"{p}_ConsumptionProfile__cio",
                     "gas_contracts__c",
                     _num_cmp(f"{p}_ConsumptionProfile__cio", "gas_contracts__c",
-                             "greater than or equal", 1),
+                             "less than", 1),
                 ),
             ]),
-            "excludeCriteria": _logic([]),
         },
 
         # 4. Churn Risk
@@ -1634,18 +1617,19 @@ def airlines_segment_defs(prefix: str) -> list:
             "includeCriteria": _logic([
                 _ci_filter(
                     f"{p}_CustomerRiskProfile__cio",
-                    "days_since_last_flight__c",
-                    _num_cmp(f"{p}_CustomerRiskProfile__cio", "days_since_last_flight__c",
-                             "greater than or equal", 180),
-                ),
-                _ci_filter(
-                    f"{p}_CustomerRiskProfile__cio",
                     "miles_balance__c",
                     _num_cmp(f"{p}_CustomerRiskProfile__cio", "miles_balance__c",
                              "greater than or equal", 5000),
                 ),
             ]),
-            "excludeCriteria": _logic([]),
+            "excludeCriteria": _logic([
+                _ci_filter(
+                    f"{p}_CustomerRiskProfile__cio",
+                    "days_since_last_flight__c",
+                    _num_cmp(f"{p}_CustomerRiskProfile__cio", "days_since_last_flight__c",
+                             "less than", 180),
+                ),
+            ]),
         },
 
         # 3. High LTV
