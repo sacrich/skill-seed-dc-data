@@ -1872,35 +1872,23 @@ def create_ci(core_url: str, token: str,
               sql: str) -> tuple:
     """POST one Calculated Insight.
 
-    Some orgs require scheduleStartDate — try with today's date first, then without.
+    publishScheduleStartDateTime is required when publishScheduleInterval != NOT_SCHEDULED.
+    Format: yyyy-MM-dd'T'HH:mm  (confirmed against Data Cloud REST API v62.0)
     dataSpace is NOT in the body, only in the ?dataspace=default query param.
     """
     import datetime
-    today = datetime.date.today().isoformat()  # "2026-06-28"
+    tomorrow = (datetime.date.today() + datetime.timedelta(days=1)).strftime("%Y-%m-%dT00:00")
 
-    base_body = {
-        "apiName":                 api_name,
-        "displayName":             display_name,
-        "description":             description,
-        "definitionType":          "CALCULATED_METRIC",
-        "publishScheduleInterval": "SIX",
-        "expression":              sql,
+    body = {
+        "apiName":                        api_name,
+        "displayName":                    display_name,
+        "description":                    description,
+        "definitionType":                 "CALCULATED_METRIC",
+        "publishScheduleInterval":        "SIX",
+        "publishScheduleStartDateTime":   tomorrow,
+        "expression":                     sql,
     }
-    endpoint = f"{BASE}/calculated-insights?dataspace=default"
-
-    # Try with scheduleStartDate first (required on some orgs)
-    body_with_date = {**base_body, "scheduleStartDate": today}
-    st, resp = api(core_url, token, "POST", endpoint, body_with_date)
-    if st in (200, 201):
-        return st, resp
-
-    # If it fails for a reason OTHER than schedule date, don't retry
-    err = str(resp).upper()
-    if "SCHEDULE" not in err and "START DATE" not in err and "DATE" not in err:
-        return st, resp
-
-    # Retry without scheduleStartDate
-    return api(core_url, token, "POST", endpoint, base_body)
+    return api(core_url, token, "POST", f"{BASE}/calculated-insights?dataspace=default", body)
 
 
 def save_sql_fallback(output_dir: Path, api_name: str,
@@ -2077,6 +2065,19 @@ def main():
     existing = list_existing_cis(core_url, core_token)
     print(f"  ℹ️  Found {len(existing)} existing CIs\n")
 
+    # Pre-flight: check if custom enrichment fields exist on the individual/account DMO.
+    # These are added by create_dmos.py (extend_standard_dmo). CIs that reference them
+    # are skipped with a clear message if missing — the SE must run create_dmos.py first.
+    enrich_dmo = "ssot__Account__dlm" if b2b_account else "ssot__Individual__dlm"
+    _st, _resp = api(core_url, core_token, "GET",
+                     f"{BASE}/data-model-objects/{enrich_dmo}?dataspace=default")
+    _existing_fields = {f["name"] for f in (_resp.get("fields") or [])} \
+                       if isinstance(_resp, dict) else set()
+    enrichment_ok = "ChurnScore__c" in _existing_fields
+    if not enrichment_ok:
+        print(f"  ⚠️  Enrichment fields missing on {enrich_dmo} (ChurnScore__c not found).")
+        print(f"     Run create_dmos.py first to add them, or the CustomerRisk CI will be skipped.\n")
+
     results    = []
     api_failed = False
 
@@ -2092,6 +2093,12 @@ def main():
 
         # Always write SQL fallback (useful for manual creation or reference)
         save_sql_fallback(out_dir, api_name, display_name, ci_sql, demo_use)
+
+        # Skip CIs that need enrichment fields not yet present on this org
+        if not enrichment_ok and "ChurnScore__c" in ci_sql:
+            print(f"  ⚠  {api_name}  SKIPPED — enrichment fields missing (run create_dmos.py first)")
+            results.append({"ci": api_name, "status": "skipped-enrichment-missing"})
+            continue
 
         # Delete-then-recreate so the SQL (and unified_individual__c dimension) is always current.
         # Simply skipping existing CIs would leave stale SQLs that can't be used in Segment Builder.
