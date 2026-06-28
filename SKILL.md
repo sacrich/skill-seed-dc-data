@@ -670,11 +670,25 @@ Expected confirmation:
 
 **Active recovery by status — act immediately, do not wait indefinitely:**
 
+**CRITICAL — NONE status recovery:**
+If any stream shows `lastRunStatus = NONE`, do NOT write inline Python. Run `verify_ingestion.py`
+with `--trigger-missing` — it handles this automatically:
+```bash
+python3 <SKILL_DIR>/scripts/verify_ingestion.py --config config-<slug>.json --trigger-missing
+```
+If that flag is not available, use the sf CLI directly (no imports needed):
+```bash
+sf api request rest --target-org <alias> \
+  "/services/data/v62.0/ssot/data-streams/<StreamApiName>/actions/run?dataspace=default" \
+  --method POST
+```
+To find the exact stream API name: `sf api request rest --target-org <alias> "/services/data/v62.0/ssot/data-streams?dataspace=default" | python3 -c "import sys,json; [print(s['name']) for s in json.load(sys.stdin).get('dataStreams',[])]"`
+
 | `lastRunStatus` | rows | Action |
 |-----------------|------|--------|
 | `SUCCESS` | > 0 | ✅ Done |
 | `SUCCESS` | = 0 | ⚠️ Datetime format issue — check Engagement DLO has DateTime field. Re-trigger: `POST /ssot/data-streams/{name}/actions/run` |
-| `NONE` | any | Not yet triggered — trigger now: `POST /ssot/data-streams/{name}/actions/run` |
+| `NONE` | any | Not yet triggered — use sf CLI above. Never write inline Python. |
 | `PROCESSING` | 0 | Wait max 10 min. If still 0 → re-trigger run |
 | `PROCESSING` | > 10 min | Re-trigger: `POST /ssot/data-streams/{name}/actions/run` |
 | `FAILED` | any | **Read the error message.** Common causes: |

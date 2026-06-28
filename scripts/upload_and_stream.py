@@ -622,8 +622,11 @@ def main():
     if failed:
         print(f"   ⚠️  {len(failed)} failures — see {results_path}")
 
-    # Trigger ingestion — wait 30s first so Salesforce has time to register the streams
-    streams_to_trigger = [r["stream"] for r in results if r["status"] in ("created", "duplicate")]
+    # Trigger ingestion — wait 30s first so Salesforce has time to register the streams.
+    # Include "existing" streams too: a stream may have been created in a previous partial
+    # run but never had ingestion triggered (status stays NONE). Re-triggering is safe —
+    # refreshMode is TOTAL_REPLACE so it just re-ingests the latest file.
+    streams_to_trigger = [r["stream"] for r in results if r["status"] in ("created", "duplicate", "existing")]
     if streams_to_trigger:
         print(f"\n⏳  Waiting 30 seconds for streams to register before triggering ingestion...")
         time.sleep(30)
