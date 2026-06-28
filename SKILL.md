@@ -534,6 +534,12 @@ Total rows:  ~<sum>
 If user requests changes → note them, update the plan, show the revised plan, ask again.
 Only proceed when user types Enter or explicitly says "looks good" / "proceed".
 
+**CRITICAL — slug/prefix changes must be propagated immediately:**
+If the user requests a different stream prefix or client slug (e.g. "use DI instead of Bank_Doar_Israel",
+"make it shorter", "rename to Postal_IL"), update `clientSlug` NOW — before writing the config in Step 4.
+Do NOT just update the display label. Update the actual variable used for `clientSlug`, `outputDir`, and
+the state file name. Show the updated slug in the revised plan so the user can confirm it.
+
 ---
 
 ### STEP 4 — Write config and generate CSVs
