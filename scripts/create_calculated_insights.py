@@ -1914,6 +1914,59 @@ def save_sql_fallback(output_dir: Path, api_name: str,
     (ci_dir / f"{api_name}.sql").write_text("\n".join(lines))
 
 
+# ─── Unified DLO discovery ────────────────────────────────────────────────────
+
+_DEFAULT_UNIFIED = {
+    "individual": ("UnifiedssotIndividualRt__dlm", "UnifiedLinkssotIndividualRt__dlm"),
+    "account":    ("UnifiedssotAccountRt__dlm",    "UnifiedLinkssotAccountRt__dlm"),
+}
+
+_ALT_UNIFIED = {
+    "individual": ("Unifiedssot__Individual__dlm", "UnifiedLinkssot__Individual__dlm"),
+    "account":    ("Unifiedssot__Account__dlm",    "UnifiedLinkssot__Account__dlm"),
+}
+
+
+def discover_unified_dlos(core_url: str, token: str, b2b_account: bool, cfg: dict) -> tuple:
+    """Return (unified_dmo, unified_link_dmo) — auto-detected from this org.
+
+    Priority:
+      1. Config override (explicit — always wins)
+      2. Probe known DMO names via GET — reliable, independent of IR name
+      3. Fall back to default constant
+    """
+    ir_type = "account" if b2b_account else "individual"
+
+    # 1. Config override
+    if b2b_account:
+        u = cfg.get("unifiedAccountDlo")
+        l = cfg.get("unifiedAccountLinkDlo")
+    else:
+        u = cfg.get("unifiedIndividualDlo")
+        l = cfg.get("unifiedLinkDlo")
+    if u and l:
+        return u, l
+
+    # 2. Probe: try all known naming patterns — whichever DMO actually exists on this org
+    candidates = list(_DEFAULT_UNIFIED.values()) + list(_ALT_UNIFIED.values())
+    for candidate_u, candidate_l in [_DEFAULT_UNIFIED[ir_type], _ALT_UNIFIED[ir_type]]:
+        st, _ = api(core_url, token, "GET",
+                    f"{BASE}/data-model-objects/{candidate_u}?dataspace=default")
+        if st == 200:
+            return candidate_u, candidate_l
+
+    # 3. Default (fallback — should rarely reach here)
+    return _DEFAULT_UNIFIED[ir_type]
+
+
+def patch_sql(sql: str, actual_unified: str, actual_link: str, b2b_account: bool) -> str:
+    """Replace hardcoded unified DLO names in SQL with the actual names on this org."""
+    ir_type = "account" if b2b_account else "individual"
+    for placeholder_u, placeholder_l in [_DEFAULT_UNIFIED[ir_type], _ALT_UNIFIED[ir_type]]:
+        sql = sql.replace(placeholder_u, actual_unified).replace(placeholder_l, actual_link)
+    return sql
+
+
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
@@ -1928,6 +1981,7 @@ def main():
     industry = cfg.get("industry", "insurance").lower()
     prefix   = slug.replace("-", "_").title().replace("_", "")   # e.g. "Migdal"
     out_dir  = Path(cfg.get("outputDir", f"data/{slug}"))
+    b2b_account = cfg.get("b2b", False) and industry in ("food_b2b", "hightech")
 
     print(f"\n📊  Creating Calculated Insights for {cfg.get('clientName', slug)} ({industry})")
     print(f"    Org: {alias}\n")
@@ -1941,6 +1995,17 @@ def main():
     core_url, core_token, _, _ = get_tokens(alias)
     print(f"  ✓  Authenticated — {core_url}")
 
+    # Auto-discover actual unified DLO names for this org
+    actual_unified, actual_link = discover_unified_dlos(core_url, core_token, b2b_account, cfg)
+    ir_type = "account" if b2b_account else "individual"
+    default_unified, default_link = _DEFAULT_UNIFIED[ir_type]
+    if actual_unified != default_unified:
+        print(f"  ℹ️  Unified DLO names auto-detected (differ from default):")
+        print(f"       {default_unified} → {actual_unified}")
+        print(f"       {default_link} → {actual_link}")
+    else:
+        print(f"  ✓  Unified DLO: {actual_unified}")
+
     existing = list_existing_cis(core_url, core_token)
     print(f"  ℹ️  Found {len(existing)} existing CIs\n")
 
@@ -1952,8 +2017,13 @@ def main():
         display_name = ci["displayName"].replace("{prefix}", prefix)
         demo_use     = ci.get("demo_use", "")
 
+        # Patch unified DLO names to match this org's actual names
+        ci_sql          = patch_sql(ci["sql"],          actual_unified, actual_link, b2b_account)
+        ci_sql_fallback = patch_sql(ci["sql_fallback"], actual_unified, actual_link, b2b_account) \
+                          if ci.get("sql_fallback") else None
+
         # Always write SQL fallback (useful for manual creation or reference)
-        save_sql_fallback(out_dir, api_name, display_name, ci["sql"], demo_use)
+        save_sql_fallback(out_dir, api_name, display_name, ci_sql, demo_use)
 
         # Delete-then-recreate so the SQL (and unified_individual__c dimension) is always current.
         # Simply skipping existing CIs would leave stale SQLs that can't be used in Segment Builder.
@@ -1978,12 +2048,12 @@ def main():
 
         status, resp = create_ci(
             core_url, core_token,
-            api_name, display_name, ci["description"], ci["sql"],
+            api_name, display_name, ci["description"], ci_sql,
         )
 
         # If primary SQL fails due to unmapped fields, try fallback SQL
         fallback_used = False
-        if status not in (200, 201) and ci.get("sql_fallback"):
+        if status not in (200, 201) and ci_sql_fallback:
             err_str = str(resp).upper()
             if "CANNOT FIND TYPE" in err_str or "FIELD NOT FOUND" in err_str or "ENTITY_SAVE_ERROR" in err_str:
                 print(f"\n    (primary SQL failed — trying fallback without Opened/Clicked) ...", end=" ", flush=True)
@@ -1991,7 +2061,7 @@ def main():
                     core_url, core_token,
                     api_name, display_name,
                     ci["description"] + " [basic: emails received only]",
-                    ci["sql_fallback"],
+                    ci_sql_fallback,
                 )
                 fallback_used = True
 
