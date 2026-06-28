@@ -259,21 +259,17 @@ def insurance_segment_defs(prefix: str) -> list:
             "key":         f"{p}_GoldTierReengagement",
             "displayName": f"{p} Gold Tier Re-engagement",
             "description": (
-                "Clients with active Life or Health policies who have received emails "
-                "(emails_received >= 2). Priority for personalised re-engagement campaign. "
+                "Clients with at least one active insurance policy who have received 2+ emails. "
+                "Priority for personalised re-engagement campaign. "
                 "Requires Identity Resolution + CI refresh to have members."
             )[:240],
             "requires_ir": True,
             "includeCriteria": _logic([
-                _dmo_filter(
-                    "InsurancePolicy__dlm", "PartyId__c", "ProductCategory__c",
-                    _text_cmp("InsurancePolicy__dlm", "ProductCategory__c",
-                              "in", ["Life", "Health"]),
-                ),
-                _dmo_filter(
-                    "InsurancePolicy__dlm", "PartyId__c", "Status__c",
-                    _text_cmp("InsurancePolicy__dlm", "Status__c",
-                              "in", ["Active"]),
+                _ci_filter(
+                    f"{p}_PolicySummary__cio",
+                    "active_policy_count__c",
+                    _num_cmp(f"{p}_PolicySummary__cio", "active_policy_count__c",
+                             "greater than or equal", 1),
                 ),
                 _ci_filter(
                     f"{p}_EngagementScore__cio",
