@@ -211,6 +211,11 @@ def post_ruleset(core_url: str, token: str, label: str,
     """
     body = {
         "label": label,
+        # rulesetId is optional for individual IR today, but adding it proactively so the
+        # generated unified DMO names are predictable: UnifiedssotIndividualRt__dlm etc.
+        # discover_unified_dlos() reads actual names from the org, so CIs/segments remain
+        # robust regardless of this value.
+        "rulesetId": "Rt",
         "description": "Match individuals across sources by fuzzy name + normalized email. "
                         "All ContactPoint entities reconciled.",
         "configurationType": "individual",
