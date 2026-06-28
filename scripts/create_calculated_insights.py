@@ -1872,21 +1872,35 @@ def create_ci(core_url: str, token: str,
               sql: str) -> tuple:
     """POST one Calculated Insight.
 
-    Proven body format (2026-06-24):
-      apiName / displayName / description / definitionType / publishScheduleInterval / expression
-      — dimensions and measures are auto-derived from the expression
-      — dataSpace is NOT in the body, only in the ?dataspace=default query param
+    Some orgs require scheduleStartDate — try with today's date first, then without.
+    dataSpace is NOT in the body, only in the ?dataspace=default query param.
     """
-    body = {
+    import datetime
+    today = datetime.date.today().isoformat()  # "2026-06-28"
+
+    base_body = {
         "apiName":                 api_name,
         "displayName":             display_name,
         "description":             description,
         "definitionType":          "CALCULATED_METRIC",
-        "publishScheduleInterval": "SIX",   # every 6h — DAILY/HOURLY rejected by platform
+        "publishScheduleInterval": "SIX",
         "expression":              sql,
     }
-    return api(core_url, token, "POST",
-               f"{BASE}/calculated-insights?dataspace=default", body)
+    endpoint = f"{BASE}/calculated-insights?dataspace=default"
+
+    # Try with scheduleStartDate first (required on some orgs)
+    body_with_date = {**base_body, "scheduleStartDate": today}
+    st, resp = api(core_url, token, "POST", endpoint, body_with_date)
+    if st in (200, 201):
+        return st, resp
+
+    # If it fails for a reason OTHER than schedule date, don't retry
+    err = str(resp).upper()
+    if "SCHEDULE" not in err and "START DATE" not in err and "DATE" not in err:
+        return st, resp
+
+    # Retry without scheduleStartDate
+    return api(core_url, token, "POST", endpoint, base_body)
 
 
 def save_sql_fallback(output_dir: Path, api_name: str,
@@ -1922,12 +1936,18 @@ _FALLBACK_UNIFIED = {
     "account":    ("UnifiedssotAccountRt__dlm",    "UnifiedLinkssotAccountRt__dlm"),
 }
 
-# All placeholder names used in hardcoded SQL — patched out before posting
+# All placeholder names used in hardcoded SQL — patched out before posting.
+# Order matters: more specific patterns first so substring replacement doesn't conflict.
 _ALL_PLACEHOLDER_NAMES = [
+    # Pattern: Ruleset ID = "RT" (ssot prefix + Rt suffix)
     "UnifiedssotIndividualRt__dlm", "UnifiedLinkssotIndividualRt__dlm",
     "UnifiedssotAccountRt__dlm",    "UnifiedLinkssotAccountRt__dlm",
+    # Pattern: ssot prefix, no suffix (some orgs)
     "Unifiedssot__Individual__dlm", "UnifiedLinkssot__Individual__dlm",
     "Unifiedssot__Account__dlm",    "UnifiedLinkssot__Account__dlm",
+    # Pattern: no ssot prefix, no suffix (e.g. blank Ruleset ID)
+    "UnifiedIndividual__dlm",       "IndividualIdentityLink__dlm",
+    "UnifiedAccount__dlm",          "AccountIdentityLink__dlm",
 ]
 
 
@@ -1959,12 +1979,17 @@ def discover_unified_dlos(core_url: str, token: str, b2b_account: bool, cfg: dic
         for ir in data.get("identityResolutions", []):
             if (ir.get("configurationType") or "individual").lower() != ir_type:
                 continue
-            # Try every field name Salesforce may use for the output DLO
+            # Try every field name Salesforce may use for the output DMO
             u = (ir.get("unifiedDmoName") or ir.get("unifiedDmoApiName") or
                  ir.get("unifiedDataModelObjectName") or ir.get("outputDmoName"))
             l = (ir.get("linkDmoName") or ir.get("linkDmoApiName") or
                  ir.get("unifiedLinkDmoName") or ir.get("linkDataModelObjectName"))
             if u and l:
+                # Normalize: ensure __dlm suffix
+                if not u.endswith("__dlm"):
+                    u += "__dlm"
+                if not l.endswith("__dlm"):
+                    l += "__dlm"
                 return u, l
             # Some orgs embed it under a nested key
             output = ir.get("output") or ir.get("outputs") or {}
@@ -1972,25 +1997,60 @@ def discover_unified_dlos(core_url: str, token: str, b2b_account: bool, cfg: dic
                 u = u or output.get("unifiedDmoName") or output.get("dmoName")
                 l = l or output.get("linkDmoName")
             if u and l:
+                if not u.endswith("__dlm"):
+                    u += "__dlm"
+                if not l.endswith("__dlm"):
+                    l += "__dlm"
+                return u, l
+            # Construct from developerName/rulesetId — Salesforce naming pattern:
+            # Unified + ssot + {PrimaryDmo} + {developerName.title()} + __dlm
+            # e.g. developerName="RT" → "UnifiedssotIndividualRt__dlm"
+            dev_name = (ir.get("developerName") or ir.get("rulesetId") or
+                        ir.get("shortId") or "")
+            # Only use short IDs (developer names), not full 15/18-char Salesforce IDs
+            if dev_name and len(dev_name) <= 12:
+                suffix = dev_name.title()  # "RT" → "Rt"
+                if b2b_account:
+                    u = f"UnifiedssotAccount{suffix}__dlm"
+                    l = f"UnifiedLinkssotAccount{suffix}__dlm"
+                else:
+                    u = f"UnifiedssotIndividual{suffix}__dlm"
+                    l = f"UnifiedLinkssotIndividual{suffix}__dlm"
                 return u, l
 
     # 3. Scan data-model-objects for Unified* DMOs created by the IR (__dlm = DMO, not DLO)
-    st, data = api(core_url, token, "GET",
-                   f"{BASE}/data-model-objects?dataspace=default")
-    if st == 200 and isinstance(data, dict):
-        all_dmos = data.get("dataModelObjects") or data.get("records") or []
-        if isinstance(data, list):
-            all_dmos = data
+    all_dmos = []
+    page_url = f"{BASE}/data-model-objects?dataspace=default"
+    while page_url:
+        st, pdata = api(core_url, token, "GET", page_url)
+        if st != 200:
+            break
+        if isinstance(pdata, list):
+            all_dmos.extend(pdata)
+            break  # list responses have no pagination
+        elif isinstance(pdata, dict):
+            items = pdata.get("dataModelObjects") or pdata.get("records") or []
+            all_dmos.extend(items)
+            page_url = pdata.get("nextPageUrl")
+        else:
+            break
+    if all_dmos:
         type_key = "Account" if b2b_account else "Individual"
-        dmo_names = [
+        raw_names = [
             d.get("name") or d.get("apiName") or d.get("developerName") or ""
-            for d in all_dmos
-            if isinstance(d, dict)
+            for d in all_dmos if isinstance(d, dict)
+        ]
+        # Normalize: ensure __dlm suffix (API often returns names without it)
+        dmo_names = [
+            (n + "__dlm" if n and not n.endswith("__dlm") else n)
+            for n in raw_names if n
         ]
         u = next((n for n in dmo_names
                   if n.startswith("Unified") and type_key in n and "Link" not in n), None)
+        # Link DMO: either starts with "UnifiedLink" or ends with "IdentityLink__dlm"
         l = next((n for n in dmo_names
-                  if n.startswith("UnifiedLink") and type_key in n), None)
+                  if (n.startswith("UnifiedLink") or n.endswith("IdentityLink__dlm"))
+                  and type_key in n), None)
         if u and l:
             return u, l
 
@@ -2043,7 +2103,7 @@ def main():
     # Auto-discover actual unified DLO names for this org
     actual_unified, actual_link = discover_unified_dlos(core_url, core_token, b2b_account, cfg)
     ir_type = "account" if b2b_account else "individual"
-    default_unified, default_link = _DEFAULT_UNIFIED[ir_type]
+    default_unified, default_link = _FALLBACK_UNIFIED[ir_type]
     if actual_unified != default_unified:
         print(f"  ℹ️  Unified DLO names auto-detected (differ from default):")
         print(f"       {default_unified} → {actual_unified}")
