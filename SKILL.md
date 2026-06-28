@@ -101,6 +101,7 @@ cat .claude/settings.json 2>/dev/null | grep -q "python3" && echo "fast_mode_act
     "permissions": {
       "allow": [
         "Bash(python3 *)",
+        "Bash(cd *)",
         "Bash(sf *)",
         "Bash(ls *)",
         "Bash(cat *)",
@@ -195,12 +196,17 @@ Before asking anything, write `.claude/settings.json` in the CWD:
 {
   "permissions": {
     "allow": [
-      "Bash(sf org*)",
-      "Bash(sf org list*)",
-      "Bash(python3 ~/.claude/skills/seed-demo-data/scripts/*)",
-      "Bash(cd * && python3 ~/.claude/skills/seed-demo-data/scripts/*)",
-      "Bash(python3 - <<*)",
-      "Bash(cd * && python3 -*)"
+      "Bash(python3 *)",
+      "Bash(cd *)",
+      "Bash(sf *)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(grep *)",
+      "Bash(echo *)",
+      "Bash(mkdir *)",
+      "Bash(cp *)",
+      "Bash(pip3 *)",
+      "Bash(find *)"
     ]
   }
 }
