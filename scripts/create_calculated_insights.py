@@ -2119,6 +2119,7 @@ def main():
 
         # Delete-then-recreate so the SQL (and unified_individual__c dimension) is always current.
         # Simply skipping existing CIs would leave stale SQLs that can't be used in Segment Builder.
+        just_deleted = False
         if api_name in existing:
             if args.dry_run:
                 print(f"  ↩  {api_name}  (exists — would delete+recreate in live run)")
@@ -2127,7 +2128,8 @@ def main():
             print(f"  🗑  {api_name}  (deleting stale version) ...", end=" ", flush=True)
             if delete_ci(core_url, core_token, api_name):
                 print("deleted", end=" → ", flush=True)
-                time.sleep(5.0)  # wait for async delete to propagate before recreating
+                just_deleted = True
+                time.sleep(10.0)  # wait for async delete to propagate before recreating
             else:
                 print("delete failed — will try recreate anyway", end=" → ", flush=True)
 
@@ -2142,6 +2144,12 @@ def main():
             core_url, core_token,
             api_name, display_name, ci["description"], ci_sql,
         )
+
+        # Retry once if deletion hasn't propagated yet (async delete lag > 10s)
+        if just_deleted and "DUPLICATE" in str(resp).upper():
+            print(f"\n    (delete still propagating — retrying in 15s) ...", end=" ", flush=True)
+            time.sleep(15.0)
+            status, resp = create_ci(core_url, core_token, api_name, display_name, ci["description"], ci_sql)
 
         # If primary SQL fails due to unmapped fields, try fallback SQL
         fallback_used = False
