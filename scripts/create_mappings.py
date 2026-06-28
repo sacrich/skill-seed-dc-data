@@ -818,6 +818,26 @@ INDUSTRY_CUSTOM_MAPPINGS = {
             ("channel",             "Channel__c"),
         ]),
     ],
+    "postal": [
+        ("Parcels", "Parcel__dlm", [
+            ("parcel_id",           "Id__c"),
+            ("contact_id",          "PartyId__c"),
+            ("ship_datetime",       "ShipDatetime__c"),
+            ("tracking_number",     "TrackingNumber__c"),
+            ("status",              "Status__c"),
+            ("service_type",        "ServiceType__c"),
+            ("weight_kg",           "WeightKg__c"),
+            ("destination_country", "DestinationCountry__c"),
+        ]),
+        ("Postal_Products", "PostalProduct__dlm", [
+            ("product_id",   "Id__c"),
+            ("contact_id",   "PartyId__c"),
+            ("product_type", "ProductType__c"),
+            ("status",       "Status__c"),
+            ("start_date",   "StartDate__c"),
+            ("renewal_date", "RenewalDate__c"),
+        ]),
+    ],
 }
 
 

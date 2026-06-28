@@ -1818,6 +1818,69 @@ BETTING_CIS = [
     _ENGAGEMENT_CI,
 ]
 
+# ─── Postal ───────────────────────────────────────────────────────────────────
+
+_SHIPPING_PROFILE_CI = {
+    "key":         "ShippingProfile",
+    "displayName": "{prefix} Shipping Profile",
+    "description": (
+        "Shipping activity profile per customer: total parcels sent, delivered count, "
+        "failed or returned deliveries, Express shipments, and average weight. "
+        "Powers frequent-sender, failed-delivery, and express-upgrade segmentation."
+    ),
+    "sql": (
+        "SELECT\n"
+        "    UnifiedssotIndividualRt__dlm.ssot__Id__c AS unified_individual__c,\n"
+        "    COUNT(Parcel__dlm.Id__c) AS total_parcels__c,\n"
+        "    SUM(CASE WHEN Parcel__dlm.Status__c = 'Delivered' THEN 1 ELSE 0 END) AS delivered_count__c,\n"
+        "    SUM(CASE WHEN Parcel__dlm.Status__c = 'Failed' THEN 1\n"
+        "             WHEN Parcel__dlm.Status__c = 'Returned' THEN 1 ELSE 0 END) AS failed_deliveries__c,\n"
+        "    SUM(CASE WHEN Parcel__dlm.ServiceType__c = 'Express' THEN 1 ELSE 0 END) AS express_count__c,\n"
+        "    AVG(Parcel__dlm.WeightKg__c) AS avg_weight_kg__c\n"
+        + _UNIFIED_JOINS +
+        "JOIN Parcel__dlm\n"
+        "    ON Parcel__dlm.PartyId__c = UnifiedLinkssotIndividualRt__dlm.SourceRecordId__c\n"
+        "GROUP BY UnifiedssotIndividualRt__dlm.ssot__Id__c"
+    ),
+    "demo_use": (
+        "Frequent senders: total_parcels__c >= 5  ·  "
+        "Failed delivery: failed_deliveries__c >= 2  ·  "
+        "Express upgraders: total_parcels__c >= 3 AND express_count__c < 1"
+    ),
+}
+
+_SERVICE_USAGE_CI = {
+    "key":         "ServiceUsage",
+    "displayName": "{prefix} Service Usage",
+    "description": (
+        "Postal product subscription profile per customer: total products, active products, "
+        "and digital mailbox count. "
+        "Powers subscription-renewal and digital-adoption segmentation."
+    ),
+    "sql": (
+        "SELECT\n"
+        "    UnifiedssotIndividualRt__dlm.ssot__Id__c AS unified_individual__c,\n"
+        "    COUNT(PostalProduct__dlm.Id__c) AS total_products__c,\n"
+        "    SUM(CASE WHEN PostalProduct__dlm.Status__c = 'Active' THEN 1 ELSE 0 END) AS active_products__c,\n"
+        "    SUM(CASE WHEN PostalProduct__dlm.ProductType__c = 'Digital Mailbox' THEN 1 ELSE 0 END) AS digital_mailbox_count__c\n"
+        + _UNIFIED_JOINS +
+        "JOIN PostalProduct__dlm\n"
+        "    ON PostalProduct__dlm.PartyId__c = UnifiedLinkssotIndividualRt__dlm.SourceRecordId__c\n"
+        "GROUP BY UnifiedssotIndividualRt__dlm.ssot__Id__c"
+    ),
+    "demo_use": (
+        "Subscribers: active_products__c >= 1  ·  "
+        "Digital adopters: digital_mailbox_count__c >= 1  ·  "
+        "No product: active_products__c = 0"
+    ),
+}
+
+POSTAL_CIS = [
+    _SHIPPING_PROFILE_CI,
+    _SERVICE_USAGE_CI,
+    _ENGAGEMENT_CI,
+]
+
 
 # ─── Industry CI map ──────────────────────────────────────────────────────────
 
@@ -1840,6 +1903,7 @@ INDUSTRY_CI_MAP = {
     "automotive":  AUTOMOTIVE_CIS,
     "real_estate": REAL_ESTATE_CIS,
     "betting":     BETTING_CIS,
+    "postal":      POSTAL_CIS,
 }
 
 

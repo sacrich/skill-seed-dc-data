@@ -877,6 +877,34 @@ INDUSTRY_DMOS = {
             ],
         },
     ],
+    "postal": [
+        {
+            "name": "Parcel__dlm", "label": "Parcel",
+            "description": "Parcel shipment record per sender (ENGAGEMENT). Tracks service type, status, weight, and destination. ShipDatetime is the event datetime for P2Y lookback. Powers frequent-sender, failed-delivery, and express-upgrade segmentation.",
+            "category": "Engagement",
+            "fields": [
+                field("Id__c","Id","Text"), field("PartyId__c","Party Id","Text"),
+                field("ShipDatetime__c","Ship Datetime","DateTime"),
+                field("TrackingNumber__c","Tracking Number","Text"),
+                field("Status__c","Status","Text"),
+                field("ServiceType__c","Service Type","Text"),
+                field("WeightKg__c","Weight Kg","Number"),
+                field("DestinationCountry__c","Destination Country","Text"),
+            ],
+        },
+        {
+            "name": "PostalProduct__dlm", "label": "Postal Product",
+            "description": "Postal service subscription per customer (PO Box, Digital Mailbox, Mail Forwarding, Premium). Tracks status and renewal date. Powers subscription-renewal and digital-adoption segmentation.",
+            "category": "Other",
+            "fields": [
+                field("Id__c","Id","Text"), field("PartyId__c","Party Id","Text"),
+                field("ProductType__c","Product Type","Text"),
+                field("Status__c","Status","Text"),
+                field("StartDate__c","Start Date","Date"),
+                field("RenewalDate__c","Renewal Date","Date"),
+            ],
+        },
+    ],
     "hospitality": [
         {
             "name": "HotelStay__dlm",

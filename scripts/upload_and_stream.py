@@ -103,6 +103,9 @@ CATEGORY_MAP = {
     # ── BETTING ──────────────────────────────────────────────────────────────
     "betting_accounts":      "Other",       # account holdings — mutable
     "betting_transactions":  "Engagement",  # transaction_datetime (DateTime)
+    # ── POSTAL ───────────────────────────────────────────────────────────────
+    "parcels":               "Engagement",  # ship_datetime (DateTime)
+    "postal_products":       "Other",       # subscription holdings — mutable
 }
 
 # Which column is the primary key, by file stem
@@ -149,6 +152,8 @@ PK_MAP = {
     "property_transactions":"transaction_id",
     "betting_accounts":     "account_id",
     "betting_transactions": "tx_id",
+    "parcels":              "parcel_id",
+    "postal_products":      "product_id",
 }
 
 # Event date field for Engagement DLOs only (field name: eventDateTimeFieldName in API).
@@ -172,6 +177,7 @@ EVENT_DATE_MAP = {
     "content_views":        "view_datetime",
     "property_inquiries":   "inquiry_datetime",
     "betting_transactions": "transaction_datetime",
+    "parcels":              "ship_datetime",
 }
 
 

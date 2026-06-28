@@ -2280,6 +2280,59 @@ def gen_betting_transactions(contacts: list) -> list:
     return rows
 
 
+# ─── Postal ───────────────────────────────────────────────────────────────────
+
+POSTAL_STATUSES   = ["Delivered", "In Transit", "Out for Delivery", "Failed", "Returned"]
+POSTAL_STATUS_W   = [0.65, 0.15, 0.10, 0.07, 0.03]
+POSTAL_SERVICES   = ["Standard", "Express", "Registered", "Eco"]
+POSTAL_SERVICE_W  = [0.50, 0.25, 0.15, 0.10]
+POSTAL_DESTS      = ["Domestic", "EU", "USA", "UK", "Other International"]
+POSTAL_DEST_W     = [0.60, 0.20, 0.08, 0.07, 0.05]
+POSTAL_PRODUCTS   = ["PO Box", "Digital Mailbox", "Mail Forwarding", "Premium"]
+POSTAL_PROD_ST    = ["Active", "Expired", "Cancelled"]
+POSTAL_PROD_ST_W  = [0.70, 0.20, 0.10]
+
+
+def gen_parcels(contacts: list) -> list:
+    """Generate parcel shipment records — ENGAGEMENT stream (720-day window)."""
+    rows = []
+    for c in contacts:
+        n = random.randint(0, 15)
+        for _ in range(n):
+            rows.append({
+                "parcel_id":           _uuid(),
+                "contact_id":          c["id"],
+                "ship_datetime":       _recent_datetime(720),
+                "tracking_number":     f"IL{random.randint(100000000, 999999999)}",
+                "status":              random.choices(POSTAL_STATUSES, weights=POSTAL_STATUS_W)[0],
+                "service_type":        random.choices(POSTAL_SERVICES, weights=POSTAL_SERVICE_W)[0],
+                "weight_kg":           round(random.uniform(0.1, 30.0), 2),
+                "destination_country": random.choices(POSTAL_DESTS, weights=POSTAL_DEST_W)[0],
+            })
+    return rows
+
+
+def gen_postal_products(contacts: list) -> list:
+    """Generate postal product subscriptions — ~40% of customers hold 1-2 products."""
+    rows = []
+    for c in contacts:
+        if random.random() > 0.40:
+            continue
+        for _ in range(random.randint(1, 2)):
+            start_days_ago = random.randint(30, 1095)
+            start_date   = (datetime.today() - timedelta(days=start_days_ago)).strftime("%Y-%m-%d")
+            renewal_date = (datetime.today() + timedelta(days=random.randint(30, 365))).strftime("%Y-%m-%d")
+            rows.append({
+                "product_id":   _uuid(),
+                "contact_id":   c["id"],
+                "product_type": random.choice(POSTAL_PRODUCTS),
+                "status":       random.choices(POSTAL_PROD_ST, weights=POSTAL_PROD_ST_W)[0],
+                "start_date":   start_date,
+                "renewal_date": renewal_date,
+            })
+    return rows
+
+
 # ─── Profile enrichment helpers ─────────────────────────────────────────────
 
 PRODUCT_AFFINITY_CATALOG: dict[str, list[str]] = {
@@ -2299,6 +2352,7 @@ PRODUCT_AFFINITY_CATALOG: dict[str, list[str]] = {
     "automotive":  ["Sedan", "SUV", "Hatchback", "Electric", "Hybrid"],
     "real_estate": ["Apartment", "House", "Villa", "Studio", "Penthouse"],
     "betting":     ["Sports Betting", "Casino", "Poker", "Lottery", "Virtual Sports"],
+    "postal":      ["Standard", "Express", "Registered", "PO Box", "Digital Mailbox"],
 }
 
 
@@ -2657,6 +2711,17 @@ def main():
         _dslp = _days_since_map(betting_transactions, "contact_id", "transaction_datetime")
         for c in contacts:
             c["days_since_last_purchase"] = _dslp.get(c["id"], random.randint(1, 60))
+
+    elif industry == "postal":
+        print("  Generating parcels...")
+        parcels = gen_parcels(contacts)
+        write_csv(out_dir / "parcels.csv", parcels)
+        print("  Generating postal products...")
+        postal_products = gen_postal_products(contacts)
+        write_csv(out_dir / "postal_products.csv", postal_products)
+        _dslp = _days_since_map(parcels, "contact_id", "ship_datetime")
+        for c in contacts:
+            c["days_since_last_purchase"] = _dslp.get(c["id"], random.randint(30, 180))
 
     else:
         # fallback: just contacts + email engagement

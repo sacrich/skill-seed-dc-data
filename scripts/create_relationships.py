@@ -188,6 +188,10 @@ INDUSTRY_RELATIONSHIPS = {
         ("BettingAccount__dlm",     "PartyId__c", IND, "ssot__Id__c", "BettingAccount → Individual"),
         ("BettingTransaction__dlm", "PartyId__c", IND, "ssot__Id__c", "BettingTransaction → Individual"),
     ],
+    "postal": [
+        ("Parcel__dlm",        "PartyId__c", IND, "ssot__Id__c", "Parcel → Individual"),
+        ("PostalProduct__dlm", "PartyId__c", IND, "ssot__Id__c", "PostalProduct → Individual"),
+    ],
 }
 
 

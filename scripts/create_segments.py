@@ -2881,6 +2881,128 @@ def betting_segment_defs(prefix: str) -> list:
     ]
 
 
+def postal_segment_defs(prefix: str) -> list:
+    p = prefix
+    return [
+        # 1. FrequentSenders
+        {
+            "key":         f"{p}_FrequentSenders",
+            "displayName": f"{p} Frequent Senders",
+            "description": (
+                "Customers with 5+ parcels sent and at least one Delivered parcel (DMO confirmed). "
+                "Migrate to a business account with volume discounts and priority service."
+            )[:240],
+            "requires_ir": True,
+            "includeCriteria": _logic([
+                _ci_filter(
+                    f"{p}_ShippingProfile__cio",
+                    "total_parcels__c",
+                    _num_cmp(f"{p}_ShippingProfile__cio", "total_parcels__c",
+                             "greater than or equal", 5),
+                ),
+                _dmo_filter(
+                    "Parcel__dlm", "PartyId__c", "Status__c",
+                    "in", ["Delivered"],
+                ),
+            ]),
+            "excludeCriteria": _logic([]),
+        },
+        # 2. FailedDeliveryRecovery
+        {
+            "key":         f"{p}_FailedDeliveryRecovery",
+            "displayName": f"{p} Failed Delivery Recovery",
+            "description": (
+                "Customers with 2+ failed or returned parcels and no active postal product. "
+                "Offer a PO Box subscription or smart-locker delivery preference."
+            )[:240],
+            "requires_ir": True,
+            "includeCriteria": _logic([
+                _ci_filter(
+                    f"{p}_ShippingProfile__cio",
+                    "failed_deliveries__c",
+                    _num_cmp(f"{p}_ShippingProfile__cio", "failed_deliveries__c",
+                             "greater than or equal", 2),
+                ),
+            ]),
+            "excludeCriteria": _logic([
+                _ci_filter(
+                    f"{p}_ServiceUsage__cio",
+                    "active_products__c",
+                    _num_cmp(f"{p}_ServiceUsage__cio", "active_products__c",
+                             "greater than or equal", 1),
+                ),
+            ]),
+        },
+        # 3. DigitalSubscribers
+        {
+            "key":         f"{p}_DigitalSubscribers",
+            "displayName": f"{p} Digital Subscribers",
+            "description": (
+                "Customers with an Active postal product subscription (DMO confirmed). "
+                "Re-engage before renewal with a loyalty reward or product upgrade offer."
+            )[:240],
+            "requires_ir": True,
+            "includeCriteria": _logic([
+                _ci_filter(
+                    f"{p}_ServiceUsage__cio",
+                    "active_products__c",
+                    _num_cmp(f"{p}_ServiceUsage__cio", "active_products__c",
+                             "greater than or equal", 1),
+                ),
+                _dmo_filter(
+                    "PostalProduct__dlm", "PartyId__c", "Status__c",
+                    "in", ["Active"],
+                ),
+            ]),
+            "excludeCriteria": _logic([]),
+        },
+        # 4. ExpressUpgraders
+        {
+            "key":         f"{p}_ExpressUpgraders",
+            "displayName": f"{p} Express Upgraders",
+            "description": (
+                "Standard-service shippers with 3+ parcels but zero Express usage. "
+                "Promote Express service with a first-shipment discount."
+            )[:240],
+            "requires_ir": True,
+            "includeCriteria": _logic([
+                _ci_filter(
+                    f"{p}_ShippingProfile__cio",
+                    "total_parcels__c",
+                    _num_cmp(f"{p}_ShippingProfile__cio", "total_parcels__c",
+                             "greater than or equal", 3),
+                ),
+                _ci_filter(
+                    f"{p}_ShippingProfile__cio",
+                    "express_count__c",
+                    _num_cmp(f"{p}_ShippingProfile__cio", "express_count__c",
+                             "less than", 1),
+                ),
+            ]),
+            "excludeCriteria": _logic([]),
+        },
+        # 5. DormantReactivation
+        {
+            "key":         f"{p}_DormantReactivation",
+            "displayName": f"{p} Dormant Reactivation",
+            "description": (
+                "Registered customers with fewer than 2 parcels sent. "
+                "Re-activate with a shipping discount or first-parcel promotion."
+            )[:240],
+            "requires_ir": True,
+            "includeCriteria": _logic([
+                _ci_filter(
+                    f"{p}_ShippingProfile__cio",
+                    "total_parcels__c",
+                    _num_cmp(f"{p}_ShippingProfile__cio", "total_parcels__c",
+                             "less than", 2),
+                ),
+            ]),
+            "excludeCriteria": _logic([]),
+        },
+    ]
+
+
 # ─── Industry dispatch ────────────────────────────────────────────────────────
 
 SEGMENT_DEFS_MAP = {
@@ -2902,6 +3024,7 @@ SEGMENT_DEFS_MAP = {
     "automotive":  automotive_segment_defs,
     "real_estate": real_estate_segment_defs,
     "betting":     betting_segment_defs,
+    "postal":      postal_segment_defs,
 }
 
 
