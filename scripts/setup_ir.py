@@ -42,9 +42,10 @@ RECON_ENTITIES = [
 ]
 
 # B2B Account-level IR entities (food_b2b, hightech)
+# ssot__AccountEmailAddress__dlm is not universally provisioned; use ContactPointEmail instead.
 B2B_RECON_ENTITIES = [
     "ssot__Account__dlm",
-    "ssot__AccountEmailAddress__dlm",
+    "ssot__ContactPointEmail__dlm",
 ]
 
 
@@ -52,7 +53,7 @@ def build_b2b_recon_rules(skip_entities: set = None) -> list:
     """Build reconciliation rules for Account-level IR (food_b2b / hightech).
 
     configurationType="account" creates UnifiedssotAccountRt__dlm.
-    Reconciliation covers: Account + AccountEmailAddress.
+    Reconciliation covers: Account + ContactPointEmail.
     """
     skip = skip_entities or set()
     rules = []
@@ -79,7 +80,7 @@ def post_account_ruleset(core_url: str, token: str, label: str,
     body = {
         "label": label,
         "description": "Match B2B accounts by company name and email address. "
-                        "Account and AccountEmailAddress entities reconciled.",
+                        "Account and ContactPointEmail entities reconciled.",
         "configurationType": "account",
         "doesRunAutomatically": True,
         "matchRules": [
@@ -93,7 +94,7 @@ def post_account_ruleset(core_url: str, token: str, label: str,
                         "shouldMatchOnBlank": False,
                     },
                     {
-                        "entityName": "ssot__AccountEmailAddress__dlm",
+                        "entityName": "ssot__ContactPointEmail__dlm",
                         "fieldName": "ssot__EmailAddress__c",
                         "matchMethodType": "exactnormalized",
                         "shouldMatchOnBlank": False,
@@ -104,7 +105,7 @@ def post_account_ruleset(core_url: str, token: str, label: str,
                 "label": "Exact Email",
                 "criteria": [
                     {
-                        "entityName": "ssot__AccountEmailAddress__dlm",
+                        "entityName": "ssot__ContactPointEmail__dlm",
                         "fieldName": "ssot__EmailAddress__c",
                         "matchMethodType": "exact",
                         "shouldMatchOnBlank": False,
