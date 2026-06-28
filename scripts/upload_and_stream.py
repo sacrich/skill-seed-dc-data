@@ -590,10 +590,6 @@ def main():
 
         if status in (200, 201):
             print(f"✓  → {stream_name}")
-            # Step 5: Trigger ingestion run
-            triggered = trigger_run(core_url, core_token, stream_name)
-            if triggered:
-                print(f"       🔄  Ingestion triggered")
             results.append({"file": csv_path.name, "stream": stream_name,
                              "status": "created", "id": resp.get("id", "")})
         elif status == 409 or "DUPLICATE" in str(resp).upper() or "already exists" in str(resp).lower():
@@ -619,6 +615,19 @@ def main():
     print(f"   {len(skipped)} already existed (skipped)")
     if failed:
         print(f"   ⚠️  {len(failed)} failures — see {results_path}")
+
+    # Trigger ingestion — wait 30s first so Salesforce has time to register the streams
+    streams_to_trigger = [r["stream"] for r in results if r["status"] in ("created", "duplicate")]
+    if streams_to_trigger:
+        print(f"\n⏳  Waiting 30 seconds for streams to register before triggering ingestion...")
+        time.sleep(30)
+        print(f"🔄  Triggering ingestion on {len(streams_to_trigger)} streams...")
+        for stream_name in streams_to_trigger:
+            triggered = trigger_run(core_url, core_token, stream_name)
+            status_label = "✓" if triggered else "⚠️ (will retry on verify)"
+            print(f"   {status_label}  {stream_name}")
+            time.sleep(0.5)
+
     print(f"\n⏳  Ingestion running in the background.")
     print(f"   Check Data Cloud Setup → Data Streams to monitor progress.")
 
