@@ -1916,24 +1916,29 @@ def save_sql_fallback(output_dir: Path, api_name: str,
 
 # ─── Unified DLO discovery ────────────────────────────────────────────────────
 
-_DEFAULT_UNIFIED = {
+# Hardcoded names are only used as last-resort fallback — never as primary source.
+_FALLBACK_UNIFIED = {
     "individual": ("UnifiedssotIndividualRt__dlm", "UnifiedLinkssotIndividualRt__dlm"),
     "account":    ("UnifiedssotAccountRt__dlm",    "UnifiedLinkssotAccountRt__dlm"),
 }
 
-_ALT_UNIFIED = {
-    "individual": ("Unifiedssot__Individual__dlm", "UnifiedLinkssot__Individual__dlm"),
-    "account":    ("Unifiedssot__Account__dlm",    "UnifiedLinkssot__Account__dlm"),
-}
+# All placeholder names used in hardcoded SQL — patched out before posting
+_ALL_PLACEHOLDER_NAMES = [
+    "UnifiedssotIndividualRt__dlm", "UnifiedLinkssotIndividualRt__dlm",
+    "UnifiedssotAccountRt__dlm",    "UnifiedLinkssotAccountRt__dlm",
+    "Unifiedssot__Individual__dlm", "UnifiedLinkssot__Individual__dlm",
+    "Unifiedssot__Account__dlm",    "UnifiedLinkssot__Account__dlm",
+]
 
 
 def discover_unified_dlos(core_url: str, token: str, b2b_account: bool, cfg: dict) -> tuple:
-    """Return (unified_dmo, unified_link_dmo) — auto-detected from this org.
+    """Return (unified_dmo, unified_link_dmo) using the names Salesforce actually created on this org.
 
     Priority:
-      1. Config override (explicit — always wins)
-      2. Probe known DMO names via GET — reliable, independent of IR name
-      3. Fall back to default constant
+      1. Config override (explicit)
+      2. IR API — the IR response knows what unified DLO it created (ground truth)
+      3. Scan all DLOs for objects starting with 'Unified' matching the IR type
+      4. Hardcoded fallback (last resort)
     """
     ir_type = "account" if b2b_account else "individual"
 
@@ -1947,23 +1952,63 @@ def discover_unified_dlos(core_url: str, token: str, b2b_account: bool, cfg: dic
     if u and l:
         return u, l
 
-    # 2. Probe: try all known naming patterns — whichever DMO actually exists on this org
-    candidates = list(_DEFAULT_UNIFIED.values()) + list(_ALT_UNIFIED.values())
-    for candidate_u, candidate_l in [_DEFAULT_UNIFIED[ir_type], _ALT_UNIFIED[ir_type]]:
-        st, _ = api(core_url, token, "GET",
-                    f"{BASE}/data-model-objects/{candidate_u}?dataspace=default")
-        if st == 200:
-            return candidate_u, candidate_l
+    # 2. IR API — ask the IR what it produced (most reliable)
+    st, data = api(core_url, token, "GET",
+                   f"{BASE}/identity-resolutions?dataspace=default")
+    if st == 200 and isinstance(data, dict):
+        for ir in data.get("identityResolutions", []):
+            if (ir.get("configurationType") or "individual").lower() != ir_type:
+                continue
+            # Try every field name Salesforce may use for the output DLO
+            u = (ir.get("unifiedDmoName") or ir.get("unifiedDmoApiName") or
+                 ir.get("unifiedDataModelObjectName") or ir.get("outputDmoName"))
+            l = (ir.get("linkDmoName") or ir.get("linkDmoApiName") or
+                 ir.get("unifiedLinkDmoName") or ir.get("linkDataModelObjectName"))
+            if u and l:
+                return u, l
+            # Some orgs embed it under a nested key
+            output = ir.get("output") or ir.get("outputs") or {}
+            if isinstance(output, dict):
+                u = u or output.get("unifiedDmoName") or output.get("dmoName")
+                l = l or output.get("linkDmoName")
+            if u and l:
+                return u, l
 
-    # 3. Default (fallback — should rarely reach here)
-    return _DEFAULT_UNIFIED[ir_type]
+    # 3. Scan data-model-objects for Unified* DMOs created by the IR (__dlm = DMO, not DLO)
+    st, data = api(core_url, token, "GET",
+                   f"{BASE}/data-model-objects?dataspace=default")
+    if st == 200 and isinstance(data, dict):
+        all_dmos = data.get("dataModelObjects") or data.get("records") or []
+        if isinstance(data, list):
+            all_dmos = data
+        type_key = "Account" if b2b_account else "Individual"
+        dmo_names = [
+            d.get("name") or d.get("apiName") or d.get("developerName") or ""
+            for d in all_dmos
+            if isinstance(d, dict)
+        ]
+        u = next((n for n in dmo_names
+                  if n.startswith("Unified") and type_key in n and "Link" not in n), None)
+        l = next((n for n in dmo_names
+                  if n.startswith("UnifiedLink") and type_key in n), None)
+        if u and l:
+            return u, l
+
+    # 4. Hardcoded fallback
+    print(f"  ⚠️  Could not auto-detect unified DLO names from IR API — using fallback names.")
+    print(f"     If CIs fail with 'Cannot find type', add to config:")
+    print(f"       \"unifiedIndividualDlo\": \"<actual name>\"")
+    print(f"       \"unifiedLinkDlo\": \"<actual link name>\"")
+    return _FALLBACK_UNIFIED[ir_type]
 
 
-def patch_sql(sql: str, actual_unified: str, actual_link: str, b2b_account: bool) -> str:
-    """Replace hardcoded unified DLO names in SQL with the actual names on this org."""
-    ir_type = "account" if b2b_account else "individual"
-    for placeholder_u, placeholder_l in [_DEFAULT_UNIFIED[ir_type], _ALT_UNIFIED[ir_type]]:
-        sql = sql.replace(placeholder_u, actual_unified).replace(placeholder_l, actual_link)
+def patch_sql(sql: str, actual_unified: str, actual_link: str) -> str:
+    """Replace ALL known placeholder unified DLO names in SQL with the actual names on this org."""
+    for name in _ALL_PLACEHOLDER_NAMES:
+        if "Link" in name:
+            sql = sql.replace(name, actual_link)
+        else:
+            sql = sql.replace(name, actual_unified)
     return sql
 
 
@@ -2018,8 +2063,8 @@ def main():
         demo_use     = ci.get("demo_use", "")
 
         # Patch unified DLO names to match this org's actual names
-        ci_sql          = patch_sql(ci["sql"],          actual_unified, actual_link, b2b_account)
-        ci_sql_fallback = patch_sql(ci["sql_fallback"], actual_unified, actual_link, b2b_account) \
+        ci_sql          = patch_sql(ci["sql"],          actual_unified, actual_link)
+        ci_sql_fallback = patch_sql(ci["sql_fallback"], actual_unified, actual_link) \
                           if ci.get("sql_fallback") else None
 
         # Always write SQL fallback (useful for manual creation or reference)
