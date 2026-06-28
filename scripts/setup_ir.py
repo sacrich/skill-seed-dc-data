@@ -129,12 +129,35 @@ def _dmo_has_source(core_url: str, token: str, dmo: str) -> bool:
 
 
 def list_rulesets(core_url: str, token: str) -> list:
-    """Return existing IR rulesets (any individual-config ruleset on this dataspace)."""
+    """Return all existing IR rulesets on this dataspace."""
     status, data = api(core_url, token, "GET",
                        f"{BASE}/identity-resolutions?dataspace=default")
     if status != 200 or not isinstance(data, dict):
         return []
     return data.get("identityResolutions", [])
+
+
+def is_limit_error(resp) -> bool:
+    """Return True if the API response indicates the org's IR ruleset limit was reached."""
+    msg = json.dumps(resp).upper()
+    return any(k in msg for k in (
+        "MAXIMUM NUMBER", "LIMIT_EXCEEDED", "LIMIT EXCEEDED",
+        "MAX_RULESETS", "MAXIMUM RULESETS", "REACHED THE MAXIMUM",
+        "TOO MANY", "EXCEEDED THE LIMIT",
+    ))
+
+
+def print_ruleset_table(rulesets: list) -> None:
+    """Print a human-readable table of all rulesets."""
+    print(f"\n  {'#':<4} {'ID':<22} {'Type':<12} {'Status':<14} {'Label'}")
+    print(f"  {'─'*4} {'─'*22} {'─'*12} {'─'*14} {'─'*30}")
+    for i, r in enumerate(rulesets, 1):
+        rid    = (r.get("id") or "")[:22]
+        rtype  = (r.get("configurationType") or "individual")[:12]
+        status = (r.get("rulesetStatus") or r.get("status") or "?")[:14]
+        label  = (r.get("label") or "")[:40]
+        print(f"  {i:<4} {rid:<22} {rtype:<12} {status:<14} {label}")
+    print(f"\n  Total rulesets on this org: {len(rulesets)}")
 
 
 def build_recon_rules(skip_entities: set = None) -> list:
@@ -219,9 +242,27 @@ def post_ruleset(core_url: str, token: str, label: str,
                f"{BASE}/identity-resolutions?dataspace=default", body)
 
 
+def trigger_run_now(core_url: str, token: str, rs_id: str) -> bool:
+    """Trigger run-now on an existing ruleset. Returns True on success."""
+    for attempt in range(4):
+        run_st, run_resp = api(core_url, token, "POST",
+                               f"{BASE}/identity-resolutions/{rs_id}/actions/run-now",
+                               body={})
+        rc = (run_resp.get("resultCode") if isinstance(run_resp, dict) else None) or ""
+        if run_st in (200, 201, 202) or "AlreadyRunning" in str(rc):
+            return True
+        if attempt < 3:
+            time.sleep(10)
+    return False
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default="config.json")
+    ap.add_argument("--list-only", action="store_true",
+                    help="List existing IR rulesets and exit (no create/trigger)")
+    ap.add_argument("--use-id",
+                    help="Reuse an existing ruleset by ID (skip creation, just trigger run-now)")
     ap.add_argument("--skip-recon-entity", action="append", default=[],
                     help="Drop a recon entity the org rejects (repeatable), "
                          "e.g. --skip-recon-entity ssot__ContactPointPhone__dlm")
@@ -252,63 +293,58 @@ def main():
     core_url, core_token, _, _ = get_tokens(alias)
     print(f"  ✓  Authenticated — {core_url}")
 
-    # ── Idempotency: reuse any existing ruleset of the matching configurationType ─
     all_rulesets = list_rulesets(core_url, core_token)
-    # Filter to matching configurationType so B2B doesn't reuse an Individual ruleset
-    existing = [
-        r for r in all_rulesets
-        if (r.get("configurationType") or "individual").lower() == ir_config_type
-    ]
-    if not existing and all_rulesets:
-        # If there's a ruleset but wrong type, warn but don't reuse it
-        wrong_types = [r.get("configurationType", "?") for r in all_rulesets]
-        print(f"  ⚠️  Found {len(all_rulesets)} ruleset(s) but wrong type: {wrong_types}")
-        print(f"       Need: {ir_config_type} — will create new one")
-    if existing:
-        # Prefer the PUBLISHED/active ruleset; fall back to the first one
+
+    # ── --list-only: show table and exit ─────────────────────────────────────
+    if args.list_only:
+        print_ruleset_table(all_rulesets)
+        sys.exit(0)
+
+    # ── --use-id: reuse a specific ruleset by ID ──────────────────────────────
+    if args.use_id:
+        target = next((r for r in all_rulesets if r.get("id") == args.use_id), None)
+        if not target:
+            print(f"  ❌  Ruleset ID '{args.use_id}' not found on this org.")
+            print_ruleset_table(all_rulesets)
+            sys.exit(1)
+        rs_id    = target.get("id")
+        rs_label = target.get("label", "?")
+        rs_type  = (target.get("configurationType") or "individual").lower()
+        if rs_type != ir_config_type:
+            print(f"  ⚠️  Ruleset '{rs_label}' is type '{rs_type}' but demo needs '{ir_config_type}'.")
+            print(f"      Using it anyway — unified profiles will be {rs_type}-based.")
+        print(f"  ↩  Using existing ruleset: '{rs_label}' (id={rs_id})")
+        print(f"  ▶  Triggering run-now…", end=" ", flush=True)
+        ok = trigger_run_now(core_url, core_token, rs_id)
+        print("✓" if ok else "⚠️  (run manually from UI)")
+        print(f"  ⏳  IR job started — ~15-40 min to unify profiles.")
+        sys.exit(0)
+
+    # ── Check for matching rulesets ───────────────────────────────────────────
+    matching = [r for r in all_rulesets
+                if (r.get("configurationType") or "individual").lower() == ir_config_type]
+
+    if matching:
+        # Show all matching rulesets — wizard already asked SE which to use;
+        # in non-interactive mode, prefer PUBLISHED, else first.
         active = next(
-            (r for r in existing
+            (r for r in matching
              if (r.get("rulesetStatus") or "").upper() in ("PUBLISHED", "PUBLISHING")),
-            existing[0],
+            matching[0],
         )
-        rs_id = active.get("id", "")
+        rs_id     = active.get("id", "")
         rs_status = (active.get("rulesetStatus") or active.get("status", "unknown")).upper()
-        rs_label = active.get("label", "?")
-        rs_job_status = active.get("lastJobStatus", "")
-        unified_profiles = active.get("totalUnifiedProfiles", "?")
-        print(f"  ↩  Individual-config ruleset found:")
+        rs_label  = active.get("label", "?")
+
+        if len(matching) > 1:
+            print(f"  ℹ️  {len(matching)} existing '{ir_config_type}' rulesets found — using PUBLISHED one:")
+        else:
+            print(f"  ↩  Existing '{ir_config_type}' ruleset found:")
         print(f"     label='{rs_label}'  id={rs_id}  status={rs_status}")
 
-        if rs_status == "PUBLISHED":
-            print(f"     lastJobStatus={rs_job_status}  unifiedProfiles={unified_profiles}")
-            # Always trigger run-now so freshly seeded data gets unified immediately.
-            # Endpoint: POST /ssot/identity-resolutions/{id}/actions/run-now
-            # (NOT /actions/run — that 404s on Storm; proven 2026-06-16)
-            print(f"  ▶  Triggering run-now to unify seeded data…", end=" ", flush=True)
-            run_ok = False
-            run_note = ""
-            for attempt in range(4):
-                run_st, run_resp = api(core_url, core_token, "POST",
-                                      f"{BASE}/identity-resolutions/{rs_id}/actions/run-now",
-                                      body={})
-                rc = (run_resp.get("resultCode") if isinstance(run_resp, dict) else None) or ""
-                if run_st in (200, 201, 202) or "AlreadyRunning" in str(rc):
-                    run_ok = True
-                    run_note = rc or str(run_st)
-                    break
-                run_note = f"HTTP {run_st} {str(rc)[:60]}"
-                if attempt < 3:
-                    time.sleep(10)
-            if run_ok:
-                print(f"✓  ({run_note})")
-                print(f"  ⏳  IR job started — ~15-40 min to unify profiles.")
-            else:
-                print(f"⚠️  run-now returned: {run_note}")
-                print(f"  📋  Trigger manually: Setup → Identity Resolution → '{rs_label}' → Run Now")
-        elif rs_status in ("NEW", "DRAFT", "UNPUBLISHED") and not active.get("matchRules"):
-            # Empty shell with no match rules — we should create our own
-            print(f"  ⚠️  Existing ruleset has no match rules (empty shell) — will create new one")
-            existing = []  # fall through to creation
+        if rs_status in ("NEW", "DRAFT", "UNPUBLISHED") and not active.get("matchRules"):
+            print(f"  ⚠️  Ruleset has no match rules (empty shell) — creating new one instead")
+            matching = []  # fall through to creation
         elif rs_status in ("NEW", "DRAFT", "UNPUBLISHED"):
             print(f"  ℹ️  Ruleset is in {rs_status} — publishing now...")
             pub_st, pub_resp = api(core_url, core_token, "PATCH",
@@ -318,11 +354,13 @@ def main():
                 print(f"  ✓  Published — IR job started (~15-40 min)")
             else:
                 print(f"  ⚠️  Publish failed: {pub_st} {str(pub_resp)[:120]}")
-                print(f"     Publish manually: Data Cloud Setup → Identity Resolution")
         else:
-            print(f"     Status={rs_status} — nothing to do.")
+            print(f"  ▶  Triggering run-now to unify seeded data…", end=" ", flush=True)
+            ok = trigger_run_now(core_url, core_token, rs_id)
+            print("✓" if ok else f"⚠️  (trigger manually from UI)")
+            print(f"  ⏳  IR job started — ~15-40 min to unify profiles.")
 
-        if existing:
+        if matching:
             sys.exit(0)
 
     # ── Check which DMOs have mapped sources ──────────────────────────────────
@@ -385,7 +423,21 @@ def main():
         if structural_left <= 0:
             break
 
-        # CASE B: entity rejected as IR-ineligible → drop and retry
+        # CASE B: org limit reached — surface it clearly and exit
+        if is_limit_error(resp):
+            print(f"\n  ❌  ORG RULESET LIMIT REACHED")
+            all_rulesets = list_rulesets(core_url, core_token)
+            print_ruleset_table(all_rulesets)
+            print(f"\n  Cannot create a new '{ir_config_type}' ruleset — org limit reached.")
+            print(f"  Options:")
+            print(f"    1. Delete an existing ruleset in the UI:")
+            print(f"       Data Cloud → Setup → Identity Resolution → (select) → Delete")
+            print(f"       Then re-run: python3 setup_ir.py --config {args.config}")
+            print(f"    2. Reuse an existing ruleset (may be wrong type):")
+            print(f"       python3 setup_ir.py --config {args.config} --use-id <ID>")
+            sys.exit(2)  # exit code 2 = limit error — wizard checks for this
+
+        # CASE C: entity rejected as IR-ineligible → drop and retry
         m = re.search(r"data model object '([^']+)' can't be used for identity resolution",
                       msg, re.IGNORECASE)
         if m:
@@ -417,24 +469,8 @@ def main():
         # ensures the job starts immediately rather than waiting for the next scheduler tick.
         print(f"  ▶  Triggering run-now on new ruleset…", end=" ", flush=True)
         time.sleep(5)  # brief wait for the ruleset to finish provisioning
-        run_ok2 = False
-        run_note2 = ""
-        for attempt in range(4):
-            run_st2, run_resp2 = api(core_url, core_token, "POST",
-                                    f"{BASE}/identity-resolutions/{rs_id}/actions/run-now",
-                                    body={})
-            rc2 = (run_resp2.get("resultCode") if isinstance(run_resp2, dict) else None) or ""
-            if run_st2 in (200, 201, 202) or "AlreadyRunning" in str(rc2):
-                run_ok2 = True
-                run_note2 = rc2 or str(run_st2)
-                break
-            run_note2 = f"HTTP {run_st2} {str(run_resp2)[:60]}"
-            if attempt < 3:
-                time.sleep(12)
-        if run_ok2:
-            print(f"✓  ({run_note2})")
-        else:
-            print(f"⚠️  {run_note2}  (run will start automatically)")
+        ok2 = trigger_run_now(core_url, core_token, rs_id)
+        print("✓" if ok2 else "⚠️  (run will start automatically)")
 
         unified_dmo = "UnifiedssotAccountRt__dlm" if b2b_account else "UnifiedssotIndividualRt__dlm"
         print(f"\n  ⏳  Identity Resolution running — ~15-40 min to unify profiles.")

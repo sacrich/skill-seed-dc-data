@@ -808,11 +808,52 @@ Run:
 python3 <SKILL_DIR>/scripts/setup_ir.py --config config-<slug>.json
 ```
 
-The script:
-1. Checks if an IR ruleset already exists (`GET /ssot/identity-resolutions?dataspace=default`)
-2. If none exists → creates one with Normalized Email + Exact Full Name matching rules
-3. Publishes the ruleset if not yet published
-4. Triggers `run-now` automatically
+**⚠️ Orgs have a ruleset limit (varies: 2, 3, or 4 depending on license).** Always check before creating. The script detects the limit dynamically — never assume a fixed number.
+
+**Step 6d — decision tree (follow exactly):**
+
+```
+1. List existing rulesets:
+   python3 <SKILL_DIR>/scripts/setup_ir.py --list-only --config config-<slug>.json
+```
+
+Read the output and decide:
+
+| Situation | Action |
+|-----------|--------|
+| 0 rulesets | Create new (run script without flags) |
+| 1+ rulesets, one matches correct type (individual/account) | Reuse it — show SE, ask confirmation, run with `--use-id <id>` |
+| 1+ rulesets, none match correct type, slots available | Ask SE: create correct type (recommended) or reuse wrong type |
+| Limit reached — creation fails with exit code 2 | STOP — show SE options (delete one or reuse existing) |
+
+**Show the SE what exists before asking:**
+
+> 🔍 I found the following Identity Resolution rulesets on this org:
+>
+> | # | ID | Type | Status | Label |
+> |---|---|---|---|---|
+> | 1 | abc123 | individual | PUBLISHED | Migdal Identity Resolution |
+>
+> Capacity: 1/2 used (1 slot free)
+>
+> This demo needs an **individual** ruleset. The existing one matches. Should I reuse it
+> (triggers a new run on your seeded data), or create a fresh one?
+
+If SE confirms reuse:
+```bash
+python3 <SKILL_DIR>/scripts/setup_ir.py --config config-<slug>.json --use-id <id>
+```
+
+If SE wants new or no matching exists:
+```bash
+python3 <SKILL_DIR>/scripts/setup_ir.py --config config-<slug>.json
+```
+
+If script exits with code 2 (limit error) — STOP and show the SE:
+> ❌ This org has reached its IR ruleset limit and has no [individual/account] ruleset available.
+> To continue, either:
+> 1. Delete an existing ruleset: **Data Cloud → Setup → Identity Resolution → (select) → Delete**, then type "IR ready"
+> 2. Reuse an existing ruleset (wrong type — unified profiles will differ): type "reuse IR `<id>`"
 
 **Important API notes:**
 - IR create endpoint: `POST /ssot/identity-resolutions?dataspace=default`
