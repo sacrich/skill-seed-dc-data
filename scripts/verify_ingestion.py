@@ -111,10 +111,8 @@ def check_stream(detail: dict) -> tuple[str, int]:
 
 
 def _status_icon(status: str, rows: int) -> str:
-    if status == "SUCCESS" and rows > 0:
+    if status == "SUCCESS":
         return "✅"
-    if status == "SUCCESS" and rows == 0:
-        return "⚠️ "
     if status == "RUNNING":
         return "🔄"
     if status == "FAILED":
@@ -202,9 +200,9 @@ def main():
             print()
             last_print = time.time()
 
-        # Check if all done
+        # Check if all done — SUCCESS is sufficient; some orgs don't return totalRows
         all_ok = all(
-            status == "SUCCESS" and rows > 0
+            status == "SUCCESS"
             for status, rows in results.values()
         )
         any_failed = any(status == "FAILED" for status, _ in results.values())
@@ -242,7 +240,7 @@ def main():
 
         if elapsed >= args.timeout:
             still_pending = [n for n, (s, r) in results.items()
-                             if s != "SUCCESS" or r == 0]
+                             if s != "SUCCESS"]
             print(f"  ⏰  Timeout after {args.timeout}s. Still pending:")
             for n in still_pending:
                 s, r = results[n]
