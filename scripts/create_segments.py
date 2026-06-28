@@ -238,7 +238,13 @@ def _text_cmp(ci_name: str, field: str, operator: str, values: list) -> dict:
 
 
 def _logic(filters: list, operator: str = "and") -> dict:
-    """LogicalComparison wrapper around a list of filter nodes."""
+    """LogicalComparison wrapper around a list of filter nodes.
+
+    Returns {} for empty lists — the API requires an empty object for no criteria,
+    not an empty LogicalComparison (which creates a broken container in the UI).
+    """
+    if not filters:
+        return {}
     return {"type": "LogicalComparison", "operator": operator, "filters": filters}
 
 
