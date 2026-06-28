@@ -293,8 +293,9 @@ def main():
     b2b_account = cfg.get("b2b", False) and industry in ("food_b2b", "hightech")
     ir_config_type = "account" if b2b_account else "individual"
 
-    # Include client name to avoid developer-name collisions when multiple demos share the org.
-    ruleset_label = f"{client_name} Account Identity Resolution" if b2b_account else "Individual Identity Resolution"
+    # Generic label — IR rulesets are shared across the org, not per-client.
+    # (The rulesetId='Rt' in post_account_ruleset prevents the ${suffix} collision.)
+    ruleset_label = "Account Identity Resolution" if b2b_account else "Individual Identity Resolution"
     required_dmo = "ssot__Account__dlm" if b2b_account else "ssot__Individual__dlm"
 
     if b2b_account:
