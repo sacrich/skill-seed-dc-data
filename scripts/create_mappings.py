@@ -1075,6 +1075,14 @@ def main():
                     dlo_api_name = v
                     break
 
+        # Backward compat: if stream was created with legacy naming (before industry-label
+        # prefix was added), fall back to the old name so in-progress demos aren't broken.
+        if not dlo_api_name:
+            legacy_name = f"{prefix}_{dlo_suffix}"
+            dlo_api_name = dlos.get(legacy_name)
+            if dlo_api_name:
+                stream_name = legacy_name
+
         if not dlo_api_name:
             print(f"  ⚠️  Stream not found: {stream_name} — skipping {dmo_name}")
             results.append({"stream": stream_name, "dmo": dmo_name, "status": "stream-not-found"})
