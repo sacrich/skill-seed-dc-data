@@ -349,7 +349,7 @@ def insurance_segment_defs(prefix: str) -> list:
                 ),
                 _dmo_filter(
                     "InsurancePolicy__dlm", "PartyId__c", "Status__c",
-                    "equal to", "Active",
+                    "in", ["Active"],
                 ),
                 _ci_filter(
                     f"{p}_EngagementScore__cio",
