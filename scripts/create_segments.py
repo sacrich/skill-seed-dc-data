@@ -116,8 +116,10 @@ def _dmo_filter(dmo_name: str, join_field: str, filter_field: str,
         dmo_name:     DMO to filter on, e.g. "InsurancePolicy__dlm"
         join_field:   field linking DMO to ssot__Individual, e.g. "PartyId__c"
         filter_field: field to apply the condition on, e.g. "ProductCategory__c"
-        operator:     "in", "contains", "equal to", "greater than or equal", etc.
-        values:       list[str] for text "in"/"contains"; single str; or number
+        operator:     text fields → "in", "contains", "starts with", "not in", "not contains"
+                      number fields → "greater than or equal", "less than", "equal", etc.
+                      ("equal to" is NOT valid for TextComparison — use "in" with a list)
+        values:       list[str] for text "in"/"contains"; single str (auto-wrapped); or number
     """
     path = [
         [
