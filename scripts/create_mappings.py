@@ -88,6 +88,28 @@ def _effective_suffix(dlo_suffix: str, industry: str, ind_label: str) -> str:
     return dlo_suffix
 
 
+def _b2b_stream_candidates(prefix: str, dlo_suffix: str, industry: str, ind_label: str) -> list:
+    """Return all candidate stream names to try for B2B standard mappings.
+
+    upload_and_stream.py may have used the old naming (Varonis_Contacts) or
+    the new B2B-renamed naming (Varonis_Hightech_Accounts). Try both.
+    """
+    B2B_SUFFIX_ALIASES = {
+        "Accounts":        ["Contacts"],
+        "Account_Emails":  ["Contact_Emails"],
+        "Email_Engagement": ["Email_Engagement"],
+        "Web_Engagement":   ["Web_Engagement"],
+    }
+    candidates = [f"{prefix}_{_effective_suffix(dlo_suffix, industry, ind_label)}"]
+    for alias_suffix in B2B_SUFFIX_ALIASES.get(dlo_suffix, []):
+        candidates.append(f"{prefix}_{alias_suffix}")
+        candidates.append(f"{prefix}_{ind_label}_{alias_suffix}")
+    # Always also try the bare suffix (no ind_label) as a last resort
+    if dlo_suffix not in candidates:
+        candidates.append(f"{prefix}_{dlo_suffix}")
+    return candidates
+
+
 # ─── mapping specs ───────────────────────────────────────────────────────────
 # Each entry: (dlo_suffix, dmo_name, [(dlo_field, dmo_field), ...])
 # dlo_suffix = the stream name suffix (e.g. "Contacts" → <Prefix>_Contacts)
@@ -192,7 +214,8 @@ STANDARD_MAPPINGS = [
 
 # B2B Account standard mappings — used instead of STANDARD_MAPPINGS for food_b2b / hightech.
 # Contacts map to ssot__Account__dlm (company-level entity) rather than ssot__Individual__dlm.
-# Contact_Emails map to ssot__AccountEmailAddress__dlm (FK = ssot__AccountId__c, not ssot__PartyId__c).
+# Account_Emails map to ssot__ContactPointEmail__dlm with ssot__PartyId__c = account source record ID.
+# (ssot__AccountEmailAddress__dlm is not provisioned on all orgs; ContactPointEmail is universal.)
 B2B_STANDARD_MAPPINGS = [
     # Account — company-level identity entity + ALL enrichment fields mapped directly.
     # Enrichment custom fields are added to ssot__Account__dlm via create_dmos.extend_standard_dmo().
@@ -229,14 +252,15 @@ B2B_STANDARD_MAPPINGS = [
             ("product_affinity",       "ProductAffinity__c"),
         ],
     ),
-    # AccountEmailAddress — B2B equivalent of ContactPointEmail
-    # FK = ssot__AccountId__c (NOT ssot__PartyId__c — that field does not exist on this DMO)
+    # B2B email addresses — use ssot__ContactPointEmail__dlm (exists on all orgs).
+    # ssot__AccountEmailAddress__dlm is not universally provisioned.
+    # ssot__PartyId__c holds the account source record ID for B2B IR matching.
     (
         "Account_Emails",
-        "ssot__AccountEmailAddress__dlm",
+        "ssot__ContactPointEmail__dlm",
         [
             ("id",               "ssot__Id__c"),
-            ("contact_id",       "ssot__AccountId__c"),   # FK → Account.ssot__Id__c
+            ("contact_id",       "ssot__PartyId__c"),     # account source record ID → B2B IR match
             ("email_address",    "ssot__EmailAddress__c"),
             ("active_from_date", "ssot__ActiveFromDate__c"),
         ],
@@ -908,7 +932,6 @@ def existing_mappings(core_url: str, token: str, dmos: list = None) -> dict:
         "ssot__ContactPointPhone__dlm",
         "ssot__ContactPointAddress__dlm",
         "ssot__Account__dlm",              # B2B Account (food_b2b, hightech)
-        "ssot__AccountEmailAddress__dlm",  # B2B AccountEmailAddress
         # NOTE: IndividualProfile__dlm removed — enrichment fields now on ssot__Individual__dlm/Account
         "ssot__EmailEngagement__dlm",      # platform standard engagement (all industries)
         "ssot__WebsiteEngagement__dlm",    # platform standard web engagement (all industries)
@@ -1082,6 +1105,20 @@ def main():
             dlo_api_name = dlos.get(legacy_name)
             if dlo_api_name:
                 stream_name = legacy_name
+
+        # B2B compat: upload_and_stream may have kept Contacts/Contact_Emails names
+        # instead of renaming to Accounts/Account_Emails. Try all candidate names.
+        if not dlo_api_name and b2b_account:
+            for candidate in _b2b_stream_candidates(prefix, dlo_suffix, industry, ind_label):
+                dlo_api_name = dlos.get(candidate)
+                if not dlo_api_name:
+                    for k, v in dlos.items():
+                        if k.lower() == candidate.lower():
+                            dlo_api_name = v
+                            break
+                if dlo_api_name:
+                    stream_name = candidate
+                    break
 
         if not dlo_api_name:
             print(f"  ⚠️  Stream not found: {stream_name} — skipping {dmo_name}")
