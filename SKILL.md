@@ -24,7 +24,7 @@ Step 1   Connect org              sf org list → validate alias
 Step 2   Client + industry        auto-detect; confirm B2C vs B2B
 Step 3   Data plan + validation   show full plan; user confirms / adds fields  ← GATE
 Step 4   Generate CSVs            gen_data.py — all tables, correct types, consistent IDs
-Step 5   Upload + ingest          upload_and_stream.py (user terminal, S3 required)
+Step 5   Upload + ingest          upload_and_stream.py (run via Bash directly)
 Step 5b  Verify rows in org       GATE: confirm every stream shows rows before continuing
 Step 6a  Create custom DMOs       create_dmos.py — with descriptions, extend standard DMOs
 Step 6b  Create mappings          create_mappings.py — ALL fields, all streams
@@ -536,28 +536,23 @@ Show the script output. Confirm:
 
 ---
 
-### STEP 5 — Upload to Data Cloud (user terminal required)
+### STEP 5 — Upload to Data Cloud
 
-**S3 uploads are blocked in the Claude sandbox. This step MUST run in the user's terminal.**
+Run the upload directly via Bash:
+
+```bash
+cd <cwd> && python3 <SKILL_DIR>/scripts/upload_and_stream.py --config config-<slug>.json
+```
 
 > ℹ️ **About S3:** the upload script uses Salesforce's internal file storage (Salesforce Drive),
 > which routes through AWS S3 presigned URLs automatically. The SE does **not** need their own
-> AWS account — this is part of every licensed Data Cloud org. If the upload fails with a 403 or
-> "presigned URL" error, the org may not have Data Cloud properly provisioned.
+> AWS account — this is part of every licensed Data Cloud org.
 
-Say:
-> 📤 The upload step needs to run in **your terminal** because it makes S3 presigned-URL calls.
->
-> Open a new terminal and run:
-> ```bash
-> cd <cwd>
-> python3 <SKILL_DIR>/scripts/upload_and_stream.py --config config-<slug>.json
-> ```
->
-> This uploads the CSVs to Salesforce Drive and creates the Data Streams (~3-8 minutes).
-> Come back and type **done** when it finishes (or paste any error output).
+This uploads the CSVs to Salesforce Drive and creates the Data Streams (~3-8 minutes).
 
-Wait. When user returns, classify each stream's output:
+**If Bash fails with a network/S3/sandbox error**, fall back to asking the user to run the command in a separate terminal and paste the output back.
+
+Classify each stream's output:
 
 | Output | Meaning | Action |
 |--------|---------|--------|
