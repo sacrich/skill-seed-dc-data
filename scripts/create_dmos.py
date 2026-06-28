@@ -63,7 +63,7 @@ def field(name: str, label: str, data_type: str, pk: bool = False) -> dict:
 
 
 # ─── Enrichment fields added to ssot__Individual__dlm / ssot__Account__dlm ────
-# These are POSTed as custom fields onto the standard DMO via extend_standard_dmo().
+# These are PATCHed onto the standard DMO via extend_standard_dmo().
 # B2C industries extend ssot__Individual__dlm.
 # B2B industries (food_b2b, hightech) extend ssot__Account__dlm.
 # All CIs reference these fields directly on the standard DMO (no separate profile DMO).
@@ -101,7 +101,7 @@ INDIVIDUAL_CUSTOM_FIELDS = [
 STANDARD_DMOS: list = []
 
 # ─── Custom fields to extend ssot__WebsiteEngagement__dlm ────────────────────
-# Added via POST /ssot/data-model-objects/ssot__WebsiteEngagement__dlm/fields
+# Added via PATCH /ssot/data-model-objects/ssot__WebsiteEngagement__dlm?dataspace=default
 # Standard fields already present: ssot__Id__c (PK), ssot__IndividualId__c (FK → Individual),
 #   ssot__SessionId__c, ssot__EngagementDateTm__c, ssot__PageURL__c, ssot__DeviceTypeTxt__c
 WEBSITE_ENGAGEMENT_CUSTOM_FIELDS = [
@@ -975,27 +975,24 @@ def patch_dmo_description(core_url: str, token: str, dmo_name: str, description:
 def extend_standard_dmo(core_url: str, token: str, dmo_name: str, fields: list) -> list:
     """Add custom fields to an existing standard DMO (ssot__Individual__dlm or ssot__Account__dlm).
 
-    Endpoint: POST /ssot/data-model-objects/{dmo}/fields
-    Idempotent: 409 / DUPLICATE / "already exists" responses treated as success (field exists).
+    Endpoint: PATCH /ssot/data-model-objects/{dmo}?dataspace=default
+    Body:     {"fields": [{name, label, dataType, ...}, ...]}
+    Idempotent: existing fields are silently updated (no duplicate error).
     Returns list of {field, status} results.
     """
-    results = []
-    for f in fields:
-        st, resp = api(core_url, token, "POST",
-                       f"{BASE}/data-model-objects/{dmo_name}/fields", f)
-        dup = (
-            st == 409
-            or "DUPLICATE" in str(resp).upper()
-            or "already exists" in str(resp).lower()
-        )
-        if st in (200, 201):
-            status = "created"
-        elif dup:
-            status = "existing"
-        else:
-            status = f"error-{st}"
-        results.append({"field": f["name"], "status": status, "detail": str(resp)[:80] if status.startswith("error") else ""})
-    return results
+    st, resp = api(core_url, token, "PATCH",
+                   f"{BASE}/data-model-objects/{dmo_name}?dataspace=default",
+                   {"fields": fields})
+    if st != 200:
+        return [{"field": f["name"], "status": f"error-{st}",
+                 "detail": str(resp)[:80]} for f in fields]
+    # PATCH response body varies by DMO type — do a GET to verify fields are present.
+    st2, resp2 = api(core_url, token, "GET",
+                     f"{BASE}/data-model-objects/{dmo_name}?dataspace=default")
+    present = {f["name"] for f in (resp2.get("fields") or [])} if isinstance(resp2, dict) else set()
+    return [{"field": f["name"],
+             "status": "ok" if f["name"] in present else "error-not-in-response"}
+            for f in fields]
 
 
 def main():
@@ -1080,11 +1077,11 @@ def main():
         print(f"     [dry-run] would POST {len(INDIVIDUAL_CUSTOM_FIELDS)} fields")
     else:
         ext_results = extend_standard_dmo(core_url, core_token, target_dmo, INDIVIDUAL_CUSTOM_FIELDS)
-        ok_ext   = sum(1 for r in ext_results if r["status"] in ("created", "existing"))
+        ok_ext   = sum(1 for r in ext_results if r["status"] == "ok")
         err_ext  = [r for r in ext_results if r["status"].startswith("error")]
         print(f"     {ok_ext}/{len(ext_results)} fields OK")
         for e in err_ext:
-            print(f"     ⚠️  {e['field']}: {e['detail']}")
+            print(f"     ⚠️  {e['field']}: {e.get('detail', e['status'])}")
         results.extend([{"dmo": f"{target_dmo}.{r['field']}", "status": r["status"]} for r in ext_results])
 
     # ── Extend ssot__WebsiteEngagement__dlm with custom fields ──────────────────
@@ -1097,11 +1094,11 @@ def main():
         web_results = extend_standard_dmo(
             core_url, core_token, "ssot__WebsiteEngagement__dlm", WEBSITE_ENGAGEMENT_CUSTOM_FIELDS
         )
-        ok_web  = sum(1 for r in web_results if r["status"] in ("created", "existing"))
+        ok_web  = sum(1 for r in web_results if r["status"] == "ok")
         err_web = [r for r in web_results if r["status"].startswith("error")]
         print(f"     {ok_web}/{len(web_results)} fields OK")
         for e in err_web:
-            print(f"     ⚠️  {e['field']}: {e['detail']}")
+            print(f"     ⚠️  {e['field']}: {e.get('detail', e['status'])}")
         results.extend([{"dmo": f"ssot__WebsiteEngagement__dlm.{r['field']}", "status": r["status"]} for r in web_results])
 
     # ── Extend ssot__EmailEngagement__dlm with custom fields ────────────────────
@@ -1114,11 +1111,11 @@ def main():
         email_results = extend_standard_dmo(
             core_url, core_token, "ssot__EmailEngagement__dlm", EMAIL_ENGAGEMENT_CUSTOM_FIELDS
         )
-        ok_email  = sum(1 for r in email_results if r["status"] in ("created", "existing"))
+        ok_email  = sum(1 for r in email_results if r["status"] == "ok")
         err_email = [r for r in email_results if r["status"].startswith("error")]
         print(f"     {ok_email}/{len(email_results)} fields OK")
         for e in err_email:
-            print(f"     ⚠️  {e['field']}: {e['detail']}")
+            print(f"     ⚠️  {e['field']}: {e.get('detail', e['status'])}")
         results.extend([{"dmo": f"ssot__EmailEngagement__dlm.{r['field']}", "status": r["status"]} for r in email_results])
 
     # Persist

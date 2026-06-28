@@ -216,6 +216,22 @@ _B2B_LOYALTY_PROFILE_CI = {
 
 # ─── INSURANCE CIs ────────────────────────────────────────────────────────────
 
+# Fallback for CustomerRiskProfile when ssot__Individual__dlm enrichment fields
+# (ChurnScore__c, Ltv__c, NpsScore__c) are not yet mapped/ingested on the org.
+# Happens on orgs where the full pipeline was run before Phase 2 field additions.
+# Fresh orgs (create_dmos → create_mappings → upload → create_cis) won't need this.
+_INSURANCE_RISK_FALLBACK = (
+    "SELECT\n"
+    "    UnifiedssotIndividualRt__dlm.ssot__Id__c AS unified_individual__c,\n"
+    "    COUNT(InsurancePolicy__dlm.Id__c) AS policy_count__c,\n"
+    "    SUM(CASE WHEN InsurancePolicy__dlm.Status__c = 'Active' THEN 1 ELSE 0 END) AS active_policy_count__c,\n"
+    "    SUM(InsurancePolicy__dlm.PremiumAnnual__c) AS total_annual_premium__c\n"
+    + _UNIFIED_JOINS +
+    "JOIN InsurancePolicy__dlm\n"
+    "    ON InsurancePolicy__dlm.PartyId__c = UnifiedLinkssotIndividualRt__dlm.SourceRecordId__c\n"
+    "GROUP BY UnifiedssotIndividualRt__dlm.ssot__Id__c"
+)
+
 INSURANCE_CIS = [
     {
         "key":         "PolicySummary",
@@ -291,6 +307,7 @@ INSURANCE_CIS = [
             "    ON ssot__Individual__dlm.ssot__Id__c = UnifiedLinkssotIndividualRt__dlm.SourceRecordId__c\n"
             "GROUP BY UnifiedssotIndividualRt__dlm.ssot__Id__c"
         ),
+        "sql_fallback": _INSURANCE_RISK_FALLBACK,
         "demo_use": (
             "THE retention segment: churn_score__c > 60 "
             "AND active_policy_count__c >= 2 AND total_annual_premium__c > 10000 "
@@ -2131,11 +2148,11 @@ def main():
         if status not in (200, 201) and ci_sql_fallback:
             err_str = str(resp).upper()
             if "CANNOT FIND TYPE" in err_str or "FIELD NOT FOUND" in err_str or "ENTITY_SAVE_ERROR" in err_str:
-                print(f"\n    (primary SQL failed — trying fallback without Opened/Clicked) ...", end=" ", flush=True)
+                print(f"\n    (primary SQL failed — trying fallback without enrichment fields) ...", end=" ", flush=True)
                 status, resp = create_ci(
                     core_url, core_token,
                     api_name, display_name,
-                    ci["description"] + " [basic: emails received only]",
+                    ci["description"] + " [basic]",
                     ci_sql_fallback,
                 )
                 fallback_used = True
