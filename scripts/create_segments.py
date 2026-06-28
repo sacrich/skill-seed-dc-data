@@ -24,16 +24,20 @@ from _auth import get_tokens, api  # noqa: E402
 
 API_V = "v62.0"
 BASE = f"/services/data/{API_V}/ssot"
-SEGMENT_ON = "UnifiedssotIndividualRt__dlm"   # B2C industries (default)
-B2B_SEGMENT_ON = "UnifiedssotAccountRt__dlm" # B2B industries (food_b2b, hightech)
-B2B_CI_DIM = "unified_account__c"            # dimension alias used in B2B CIs
+SEGMENT_ON     = "UnifiedssotIndividualRt__dlm"   # B2C (default placeholder)
+B2B_SEGMENT_ON = "UnifiedssotAccountRt__dlm"      # B2B (default placeholder)
+B2B_CI_DIM     = "unified_account__c"             # dimension alias in B2B CIs
+LINK_DMO       = "UnifiedLinkssotIndividualRt__dlm"  # B2C IR link DMO (placeholder)
+B2B_LINK_DMO   = "UnifiedLinkssotAccountRt__dlm"     # B2B IR link DMO (placeholder)
 
-# Candidate unified DMO names — probed in order until a 200 response is found.
+# Candidate names probed in order until HTTP 200
 _UNIFIED_CANDIDATES_B2C = ["UnifiedssotIndividualRt__dlm", "UnifiedIndividual__dlm"]
 _UNIFIED_CANDIDATES_B2B = ["UnifiedssotAccountRt__dlm",   "UnifiedAccount__dlm"]
+_LINK_CANDIDATES_B2C    = ["UnifiedLinkssotIndividualRt__dlm", "IndividualIdentityLink__dlm"]
+_LINK_CANDIDATES_B2B    = ["UnifiedLinkssotAccountRt__dlm",   "AccountIdentityLink__dlm"]
 
 
-# ─── Unified DMO resolver ────────────────────────────────────────────────────
+# ─── Org-variant resolvers ────────────────────────────────────────────────────
 
 def resolve_segment_on(core_url: str, token: str, b2b_account: bool, cfg: dict) -> tuple:
     """Return (dmo_api_name, dmo_salesforce_id) for the unified DMO to segment on.
@@ -59,6 +63,21 @@ def resolve_segment_on(core_url: str, token: str, b2b_account: bool, cfg: dict) 
     return fallback, None
 
 
+def resolve_link_dmo(core_url: str, token: str, b2b_account: bool) -> str:
+    """Return the actual Identity Resolution link DMO name for this org.
+
+    Probes candidate names; some orgs use IndividualIdentityLink__dlm,
+    others use UnifiedLinkssotIndividualRt__dlm (standard Salesforce name).
+    """
+    candidates = _LINK_CANDIDATES_B2B if b2b_account else _LINK_CANDIDATES_B2C
+    for name in candidates:
+        st, resp = api(core_url, token, "GET",
+                       f"{BASE}/data-model-objects/{name}?dataspace=default")
+        if st == 200 and isinstance(resp, dict) and resp.get("id"):
+            return name
+    return B2B_LINK_DMO if b2b_account else LINK_DMO
+
+
 # ─── Criteria builder helpers ────────────────────────────────────────────────
 
 def _ci_filter(ci_name: str, field: str, comparison: dict) -> dict:
@@ -79,32 +98,91 @@ def _ci_filter(ci_name: str, field: str, comparison: dict) -> dict:
     }
 
 
-def _dmo_filter(dmo_name: str, join_field: str, filter_field: str, comparison: dict) -> dict:
-    """Build a direct DMO attribute filter (proven 2026-06-24).
+def _dmo_filter(dmo_name: str, join_field: str, filter_field: str,
+                operator: str, values) -> dict:
+    """Build a Related Object (NumberAggregation) filter for a DMO attribute.
 
-    Uses the same 'CalculatedInsight' type as CI filters but with a DMO path.
-    The segment engine resolves the join via the defined relationship:
-      UnifiedssotIndividualRt__dlm.ssot__Id__c → <DMO>.<join_field>
+    Traversal path (3 hops — resolved dynamically in main() via string replace):
+      SEGMENT_ON.ssot__Id__c
+        → LINK_DMO.UnifiedRecordId__c
+        → LINK_DMO.SourceRecordId__c
+        → ssot__Individual__dlm.ssot__Id__c
+        → dmo_name.join_field
 
-    Works for:
-    - ssot__Individual__dlm    → join_field = 'ssot__Id__c' (enrichment fields live here)
-    - InsurancePolicy__dlm     → join_field = 'PartyId__c'
-    - InsuranceClaim__dlm      → join_field = 'PartyId__c'
-    - ssot__EmailEngagement__dlm  → join_field = 'ssot__IndividualId__c'
+    SEGMENT_ON and LINK_DMO constants are placeholders; main() replaces them with
+    the actual org-specific DMO names (resolved by resolve_segment_on / resolve_link_dmo).
+
+    Args:
+        dmo_name:     DMO to filter on, e.g. "InsurancePolicy__dlm"
+        join_field:   field linking DMO to ssot__Individual, e.g. "PartyId__c"
+        filter_field: field to apply the condition on, e.g. "ProductCategory__c"
+        operator:     "in", "contains", "equal to", "greater than or equal", etc.
+        values:       list[str] for text "in"/"contains"; single str; or number
     """
-    return {
-        "type": "CalculatedInsight",
-        "subject": {
-            "objectApiName": dmo_name,
-            "fieldApiName": join_field,
-        },
-        "path": [
-            [
-                {"objectApiName": SEGMENT_ON,  "fieldApiName": "ssot__Id__c"},
-                {"objectApiName": dmo_name,    "fieldApiName": join_field},
-            ]
+    path = [
+        [
+            {"objectApiName": SEGMENT_ON, "fieldApiName": "ssot__Id__c"},
+            {"objectApiName": LINK_DMO,   "fieldApiName": "UnifiedRecordId__c"},
         ],
-        "comparison": comparison,
+        [
+            {"objectApiName": LINK_DMO,               "fieldApiName": "SourceRecordId__c"},
+            {"objectApiName": "ssot__Individual__dlm", "fieldApiName": "ssot__Id__c"},
+        ],
+        [
+            {"objectApiName": "ssot__Individual__dlm", "fieldApiName": "ssot__Id__c"},
+            {"objectApiName": dmo_name,                "fieldApiName": join_field},
+        ],
+    ]
+
+    if isinstance(values, list):
+        filter_node = {
+            "type": "TextComparison",
+            "path": None, "joinPath": None,
+            "subject": {"objectApiName": dmo_name, "fieldApiName": filter_field},
+            "selfReference": False,
+            "operator": operator,
+            "values": values,
+        }
+    elif isinstance(values, str):
+        filter_node = {
+            "type": "TextComparison",
+            "path": None, "joinPath": None,
+            "subject": {"objectApiName": dmo_name, "fieldApiName": filter_field},
+            "selfReference": False,
+            "operator": operator,
+            "values": [values],
+        }
+    else:
+        filter_node = {
+            "type": "NumberComparison",
+            "path": None, "joinPath": None,
+            "subject": {"objectApiName": dmo_name, "fieldApiName": filter_field},
+            "selfReference": False,
+            "operator": operator,
+            "value": values,
+        }
+
+    return {
+        "type": "NumberAggregation",
+        "containerObjectApiName": dmo_name,
+        "filter": filter_node,
+        "path": path,
+        "joinPath": path,
+        "aggregateFunction": "count",
+        "comparison": {
+            "type": "NumberComparison",
+            "path": None, "joinPath": None,
+            "subject": {"objectApiName": dmo_name, "fieldApiName": "Id__c"},
+            "selfReference": False,
+            "operator": "greater than or equal",
+            "value": 1,
+        },
+        "hierarchySelected": False,
+        "hierarchicalPathList": None,
+        "innerAggregationEnabled": False,
+        "innerAggregationSubject": None,
+        "outerAggregationFunction": None,
+        "outerComparison": None,
     }
 
 
@@ -259,17 +337,19 @@ def insurance_segment_defs(prefix: str) -> list:
             "key":         f"{p}_GoldTierReengagement",
             "displayName": f"{p} Gold Tier Re-engagement",
             "description": (
-                "Clients with at least one active insurance policy who have received 2+ emails. "
-                "Priority for personalised re-engagement campaign. "
-                "Requires Identity Resolution + CI refresh to have members."
+                "Clients with active Life or Health insurance policies who have received 2+ emails. "
+                "Combines InsurancePolicy DMO filter (ProductCategory in Life/Health, Status Active) "
+                "with EngagementScore CI. Priority re-engagement audience."
             )[:240],
             "requires_ir": True,
             "includeCriteria": _logic([
-                _ci_filter(
-                    f"{p}_PolicySummary__cio",
-                    "active_policy_count__c",
-                    _num_cmp(f"{p}_PolicySummary__cio", "active_policy_count__c",
-                             "greater than or equal", 1),
+                _dmo_filter(
+                    "InsurancePolicy__dlm", "PartyId__c", "ProductCategory__c",
+                    "in", ["Life", "Health"],
+                ),
+                _dmo_filter(
+                    "InsurancePolicy__dlm", "PartyId__c", "Status__c",
+                    "equal to", "Active",
                 ),
                 _ci_filter(
                     f"{p}_EngagementScore__cio",
@@ -2798,11 +2878,17 @@ def main():
     print(f"  ✓  Authenticated — {core_url}")
 
     # Resolve the actual unified DMO name and its Salesforce internal ID on this org.
-    # The segment POST body requires segmentOnId (18-char internal ID), not just the API name.
     actual_seg_on, seg_on_id = resolve_segment_on(core_url, core_token, b2b_account, cfg)
     if actual_seg_on != seg_on:
         print(f"  ℹ️  Unified DMO auto-detected: {seg_on} → {actual_seg_on}")
-    print(f"  ℹ️  segmentOnId: {seg_on_id}\n")
+    print(f"  ℹ️  segmentOnId: {seg_on_id}")
+
+    # Resolve the Identity Resolution link DMO name (varies by org).
+    link_dmo = B2B_LINK_DMO if b2b_account else LINK_DMO
+    actual_link_dmo = resolve_link_dmo(core_url, core_token, b2b_account)
+    if actual_link_dmo != link_dmo:
+        print(f"  ℹ️  Link DMO auto-detected: {link_dmo} → {actual_link_dmo}")
+    print()
 
     segs = seg_fn(prefix)
 
@@ -2822,9 +2908,11 @@ def main():
         # ── Check required CIs ────────────────────────────────────────
         crit_str  = json.dumps(seg["includeCriteria"])
         excl_str  = json.dumps(seg["excludeCriteria"])
-        # Patch unified DMO name in criteria (may differ from constant on this org)
-        crit_str = crit_str.replace(f'"{seg_on}"', f'"{actual_seg_on}"')
-        excl_str = excl_str.replace(f'"{seg_on}"', f'"{actual_seg_on}"')
+        # Patch org-specific DMO names (unified DMO + IR link DMO may differ per org)
+        crit_str = crit_str.replace(f'"{seg_on}"',   f'"{actual_seg_on}"')
+        excl_str = excl_str.replace(f'"{seg_on}"',   f'"{actual_seg_on}"')
+        crit_str = crit_str.replace(f'"{link_dmo}"', f'"{actual_link_dmo}"')
+        excl_str = excl_str.replace(f'"{link_dmo}"', f'"{actual_link_dmo}"')
         ci_names  = set(re.findall(r'"objectApiName":\s*"([^"]+__cio)"', crit_str + excl_str))
         ci_ok = True
         for ci_name in sorted(ci_names):
