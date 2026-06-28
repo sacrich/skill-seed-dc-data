@@ -76,6 +76,53 @@ The wizard must diagnose, act, and verify at each step. Rules:
 
 ## WIZARD FLOW
 
+### PRE-STEP — Fast mode check (run silently before everything else)
+
+Check if the current directory already has the skill allowlist configured:
+
+```bash
+cat .claude/settings.json 2>/dev/null | grep -q "python3" && echo "fast_mode_active" || echo "not_set"
+```
+
+- If output is `fast_mode_active` → skip this check entirely, proceed to STEP 0.
+- If output is `not_set` → ask the user **once**:
+
+  > ⚡ **Fast mode** — do you want all skill commands to auto-approve so you don't get interrupted during setup?
+  >
+  > This writes a `.claude/settings.json` in the current demo directory. Future runs here will need zero permission prompts.
+  >
+  > **1. Yes — fast mode** *(recommended for demos)*
+  > **2. No — ask me for each command** *(default)*
+
+  **If Yes:** write `.claude/settings.json` in CWD with this exact content:
+
+  ```json
+  {
+    "permissions": {
+      "allow": [
+        "Bash(python3 *)",
+        "Bash(sf *)",
+        "Bash(ls *)",
+        "Bash(cat *)",
+        "Bash(grep *)",
+        "Bash(echo *)",
+        "Bash(mkdir *)",
+        "Bash(cp *)",
+        "Bash(pip3 *)",
+        "Bash(find *)"
+      ]
+    }
+  }
+  ```
+
+  Then reply:
+  > ✅ Fast mode saved. From your **next session** in this directory, everything runs automatically.
+  > For this session, a couple of prompts may still appear — just approve them.
+
+  **If No:** proceed silently.
+
+---
+
 ### STEP 0 — Resume check (always run first, silently)
 
 Before doing anything, scan the current directory for `state-*.json` files:
