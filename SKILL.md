@@ -680,7 +680,7 @@ If that flag is not available, use the sf CLI directly (no imports needed):
 ```bash
 sf api request rest --target-org <alias> \
   "/services/data/v62.0/ssot/data-streams/<StreamApiName>/actions/run?dataspace=default" \
-  --method POST
+  --method POST --body '{}'
 ```
 To find the exact stream API name: `sf api request rest --target-org <alias> "/services/data/v62.0/ssot/data-streams?dataspace=default" | python3 -c "import sys,json; [print(s['name']) for s in json.load(sys.stdin).get('dataStreams',[])]"`
 
