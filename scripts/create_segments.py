@@ -3114,7 +3114,9 @@ def main():
     alias    = cfg["orgAlias"]
     slug     = cfg.get("clientSlug", "client")
     industry = cfg.get("industry", "insurance").lower()
-    prefix   = slug.replace("-", "_").title().replace("_", "")   # e.g. "Migdal"
+    # Segments are shared per industry across all clients on the same org — use industry label,
+    # not client slug, so a second demo of the same vertical reuses the same segments.
+    prefix   = industry.title().replace("_", "")   # e.g. "Hightech", "Insurance", "FoodB2b"
     out_dir  = Path(cfg.get("outputDir", f"data/{slug}"))
 
     # B2B Account IR industries use UnifiedssotAccountRt__dlm as the segment-on DMO

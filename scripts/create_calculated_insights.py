@@ -2112,13 +2112,17 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default="config.json")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--force-recreate", action="store_true",
+                    help="Delete and recreate CIs even if they already exist (to update SQL)")
     args = ap.parse_args()
 
     cfg      = json.loads(Path(args.config).read_text())
     alias    = cfg["orgAlias"]
     slug     = cfg.get("clientSlug", "client")
     industry = cfg.get("industry", "insurance").lower()
-    prefix   = slug.replace("-", "_").title().replace("_", "")   # e.g. "Migdal"
+    # CIs are shared per industry across all clients on the same org — use industry label,
+    # not client slug, so a second demo of the same vertical reuses the same CIs.
+    prefix   = industry.title().replace("_", "")   # e.g. "Hightech", "Insurance", "FoodB2b"
     out_dir  = Path(cfg.get("outputDir", f"data/{slug}"))
     b2b_account = cfg.get("b2b", False) and industry in ("food_b2b", "hightech")
 
@@ -2183,19 +2187,24 @@ def main():
             results.append({"ci": api_name, "status": "skipped-enrichment-missing"})
             continue
 
-        # Delete-then-recreate so the SQL (and unified_individual__c dimension) is always current.
-        # Simply skipping existing CIs would leave stale SQLs that can't be used in Segment Builder.
+        # If CI already exists and --force-recreate is NOT set: just trigger Run Now.
+        # CIs are shared per industry — a second demo of the same vertical should reuse them.
+        # Use --force-recreate to delete+recreate (e.g. after a SQL update).
         just_deleted = False
         if api_name in existing:
             if args.dry_run:
-                print(f"  ↩  {api_name}  (exists — would delete+recreate in live run)")
+                print(f"  ↩  {api_name}  (exists — would trigger Run Now)")
                 results.append({"ci": api_name, "status": "dry-run"})
                 continue
-            print(f"  🗑  {api_name}  (deleting stale version) ...", end=" ", flush=True)
+            if not args.force_recreate:
+                print(f"  ↩  {api_name}  (already exists — queued for Run Now)")
+                results.append({"ci": api_name, "status": "existing"})
+                continue
+            print(f"  🗑  {api_name}  (force-recreate: deleting) ...", end=" ", flush=True)
             if delete_ci(core_url, core_token, api_name):
                 print("deleted", end=" → ", flush=True)
                 just_deleted = True
-                time.sleep(10.0)  # wait for async delete to propagate before recreating
+                time.sleep(10.0)
             else:
                 print("delete failed — will try recreate anyway", end=" → ", flush=True)
 
