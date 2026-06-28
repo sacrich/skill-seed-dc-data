@@ -188,6 +188,70 @@ def _dmo_filter(dmo_name: str, join_field: str, filter_field: str,
     }
 
 
+def _b2b_dmo_filter(dmo_name: str, join_field: str, filter_field: str,
+                    operator: str, values) -> dict:
+    """Build a Related Object (NumberAggregation) filter for a B2B DMO attribute.
+
+    Same structure as _dmo_filter but traverses through the B2B Account unified DMO
+    and B2B Identity Resolution link DMO. Use for food_b2b and hightech segments.
+
+    Traversal path (B2B_SEGMENT_ON and B2B_LINK_DMO are placeholders replaced in main()):
+      B2B_SEGMENT_ON.ssot__Id__c → B2B_LINK_DMO.UnifiedRecordId__c
+        → B2B_LINK_DMO.SourceRecordId__c → ssot__Account__dlm.ssot__Id__c
+        → dmo_name.join_field
+    """
+    path = [
+        [
+            {"objectApiName": B2B_SEGMENT_ON, "fieldApiName": "ssot__Id__c"},
+            {"objectApiName": B2B_LINK_DMO,   "fieldApiName": "UnifiedRecordId__c"},
+        ],
+        [
+            {"objectApiName": B2B_LINK_DMO,         "fieldApiName": "SourceRecordId__c"},
+            {"objectApiName": "ssot__Account__dlm",  "fieldApiName": "ssot__Id__c"},
+        ],
+        [
+            {"objectApiName": "ssot__Account__dlm",  "fieldApiName": "ssot__Id__c"},
+            {"objectApiName": dmo_name,              "fieldApiName": join_field},
+        ],
+    ]
+    if isinstance(values, list):
+        filter_node = {
+            "type": "TextComparison", "path": None, "joinPath": None,
+            "subject": {"objectApiName": dmo_name, "fieldApiName": filter_field},
+            "selfReference": False, "operator": operator, "values": values,
+        }
+    elif isinstance(values, str):
+        filter_node = {
+            "type": "TextComparison", "path": None, "joinPath": None,
+            "subject": {"objectApiName": dmo_name, "fieldApiName": filter_field},
+            "selfReference": False, "operator": operator, "values": [values],
+        }
+    else:
+        filter_node = {
+            "type": "NumberComparison", "path": None, "joinPath": None,
+            "subject": {"objectApiName": dmo_name, "fieldApiName": filter_field},
+            "selfReference": False, "operator": operator, "value": values,
+        }
+    return {
+        "type": "NumberAggregation",
+        "containerObjectApiName": dmo_name,
+        "filter": filter_node,
+        "path": path,
+        "joinPath": path,
+        "aggregateFunction": "count",
+        "comparison": {
+            "type": "NumberComparison", "path": None, "joinPath": None,
+            "subject": {"objectApiName": dmo_name, "fieldApiName": "Id__c"},
+            "selfReference": False,
+            "operator": "greater than or equal",
+            "value": 1,
+        },
+        "hierarchySelected": False, "hierarchicalPathList": None,
+        "innerAggregationEnabled": False, "innerAggregationSubject": None,
+        "outerAggregationFunction": None, "outerComparison": None,
+    }
+
+
 def _b2b_ci_filter(ci_name: str, field: str, comparison: dict) -> dict:
     """Build a CalculatedInsight filter for a B2B CI (unified_account__c join).
 
@@ -529,8 +593,8 @@ def food_segment_defs(prefix: str) -> list:
             "key":         f"{p}_DormantReactivation",
             "displayName": f"{p} Dormant Reactivation",
             "description": (
-                "Customers with purchase history (2+ orders) and elevated churn risk (>= 60). "
-                "Reactivation campaign with time-limited offer."
+                "Customers with purchase history (2+ orders) and elevated churn risk (>= 60) "
+                "who shopped Online. Reactivation campaign with time-limited digital offer."
             )[:240],
             "requires_ir": True,
             "includeCriteria": _logic([
@@ -545,6 +609,10 @@ def food_segment_defs(prefix: str) -> list:
                     "churn_score__c",
                     _num_cmp(f"{p}_CustomerValue__cio", "churn_score__c",
                              "greater than or equal", 60),
+                ),
+                _dmo_filter(
+                    "PurchaseOrder__dlm", "PartyId__c", "Channel__c",
+                    "in", ["Online"],
                 ),
             ]),
             "excludeCriteria": _logic([
@@ -633,7 +701,7 @@ def food_b2b_segment_defs(prefix: str) -> list:
             "key":         f"{p}_HighFrequencyAccounts",
             "displayName": f"{p} High Frequency Accounts",
             "description": (
-                "Stores placing 12+ wholesale orders — highly active key accounts. "
+                "Stores with 12+ wholesale orders and at least one Delivered order (DMO confirmed). "
                 "Candidates for premium service tier, dedicated account manager, or VIP terms."
             )[:240],
             "requires_ir": True,
@@ -643,6 +711,10 @@ def food_b2b_segment_defs(prefix: str) -> list:
                     "order_count__c",
                     _num_cmp(f"{p}_WholesaleSummary__cio", "order_count__c",
                              "greater than or equal", 12),
+                ),
+                _b2b_dmo_filter(
+                    "WholesaleOrder__dlm", "PartyId__c", "Status__c",
+                    "in", ["Delivered"],
                 ),
             ]),
             "excludeCriteria": _logic([
@@ -841,8 +913,8 @@ def retail_segment_defs(prefix: str) -> list:
             "key":         f"{p}_FrequentMobileShoppers",
             "displayName": f"{p} Frequent Mobile Shoppers",
             "description": (
-                "Customers with 3+ mobile orders and LTV >= 200. "
-                "Mobile-native high-value shoppers — target with app-exclusive offers."
+                "Customers with 3+ mobile orders and LTV >= 200 — confirmed via Mobile channel "
+                "order DMO. Mobile-native high-value shoppers — target with app-exclusive offers."
             )[:240],
             "requires_ir": True,
             "includeCriteria": _logic([
@@ -857,6 +929,10 @@ def retail_segment_defs(prefix: str) -> list:
                     "ltv__c",
                     _num_cmp(f"{p}_CustomerValue__cio", "ltv__c",
                              "greater than or equal", 200),
+                ),
+                _dmo_filter(
+                    "SalesOrder__dlm", "PartyId__c", "Channel__c",
+                    "in", ["Mobile"],
                 ),
             ]),
             "excludeCriteria": _logic([
@@ -881,8 +957,8 @@ def banking_segment_defs(prefix: str) -> list:
             "key":         f"{p}_MortgageUpsell",
             "displayName": f"{p} Mortgage Upsell",
             "description": (
-                "High-balance customers (>= 50,000) with no mortgage product. "
-                "Strong signal for mortgage upsell campaign."
+                "High-balance customers (>= 50,000) with at least one active banking product "
+                "and no mortgage. Confirmed active relationship — strong signal for mortgage upsell."
             )[:240],
             "requires_ir": True,
             "includeCriteria": _logic([
@@ -891,6 +967,10 @@ def banking_segment_defs(prefix: str) -> list:
                     "total_balance__c",
                     _num_cmp(f"{p}_AccountSummary__cio", "total_balance__c",
                              "greater than or equal", 50000),
+                ),
+                _dmo_filter(
+                    "BankingProduct__dlm", "PartyId__c", "Status__c",
+                    "in", ["Active"],
                 ),
             ]),
             "excludeCriteria": _logic([
@@ -1107,7 +1187,7 @@ def pharma_segment_defs(prefix: str) -> list:
             "key":         f"{p}_CardiovascularCare",
             "displayName": f"{p} Cardiovascular Care",
             "description": (
-                "Patients with cardiovascular prescriptions and churn score >= 50. "
+                "Patients with cardiovascular prescriptions (DMO confirmed) and churn score >= 50. "
                 "Priority for adherence programme and specialist care coordination."
             )[:240],
             "requires_ir": True,
@@ -1123,6 +1203,10 @@ def pharma_segment_defs(prefix: str) -> list:
                     "churn_score__c",
                     _num_cmp(f"{p}_CustomerHealthValue__cio", "churn_score__c",
                              "greater than or equal", 50),
+                ),
+                _dmo_filter(
+                    "Prescription__dlm", "PartyId__c", "TherapeuticArea__c",
+                    "in", ["Cardiovascular"],
                 ),
             ]),
             "excludeCriteria": _logic([
@@ -1321,7 +1405,7 @@ def telco_segment_defs(prefix: str) -> list:
             "key":         f"{p}_ContractRenewal",
             "displayName": f"{p} Contract Renewal",
             "description": (
-                "Happy customers (churn score <= 40) with active contracts — "
+                "Happy customers (churn score <= 40) with active contracts confirmed in DMO — "
                 "ideal for proactive renewal with loyalty reward."
             )[:240],
             "requires_ir": True,
@@ -1331,6 +1415,10 @@ def telco_segment_defs(prefix: str) -> list:
                     "active_contract_count__c",
                     _num_cmp(f"{p}_ServiceSummary__cio", "active_contract_count__c",
                              "greater than or equal", 1),
+                ),
+                _dmo_filter(
+                    "ServiceContract__dlm", "PartyId__c", "Status__c",
+                    "in", ["Active"],
                 ),
             ]),
             "excludeCriteria": _logic([
@@ -1392,7 +1480,7 @@ def hightech_segment_defs(prefix: str) -> list:
             "key":         f"{p}_ExpansionCandidates",
             "displayName": f"{p} Expansion Candidates",
             "description": (
-                "Active accounts with high feature adoption (>= 70) and MRR <= 5,000. "
+                "Active accounts with high feature adoption (>= 70), MRR <= 5,000, and Active subscription (DMO confirmed). "
                 "Growing usage, ready for upsell to higher tier or more seats."
             )[:240],
             "requires_ir": True,
@@ -1408,6 +1496,10 @@ def hightech_segment_defs(prefix: str) -> list:
                     "active_sub_count__c",
                     _num_cmp(f"{p}_SubscriptionSummary__cio", "active_sub_count__c",
                              "greater than or equal", 1),
+                ),
+                _b2b_dmo_filter(
+                    "HtSubscription__dlm", "PartyId__c", "Status__c",
+                    "in", ["Active"],
                 ),
             ]),
             "excludeCriteria": _logic([
@@ -1525,7 +1617,7 @@ def utilities_segment_defs(prefix: str) -> list:
             "key":         f"{p}_HighConsumers",
             "displayName": f"{p} High Consumers",
             "description": (
-                "Customers with average monthly bill >= 120. "
+                "Customers with average monthly bill >= 120 and an active utility contract (DMO). "
                 "Target with efficiency audit offer, smart meter upgrade, or budget plan."
             )[:240],
             "requires_ir": True,
@@ -1535,6 +1627,10 @@ def utilities_segment_defs(prefix: str) -> list:
                     "avg_monthly_bill__c",
                     _num_cmp(f"{p}_ConsumptionProfile__cio", "avg_monthly_bill__c",
                              "greater than or equal", 120),
+                ),
+                _dmo_filter(
+                    "UtilityContract__dlm", "PartyId__c", "Status__c",
+                    "in", ["Active"],
                 ),
             ]),
             "excludeCriteria": _logic([
@@ -1667,8 +1763,8 @@ def airlines_segment_defs(prefix: str) -> list:
             "key":         f"{p}_BusinessTravelers",
             "displayName": f"{p} Business Travelers",
             "description": (
-                "Passengers with 3+ premium cabin (Business or First) flights. "
-                "Target with corporate travel programme, lounge access, and priority boarding."
+                "Passengers with 3+ premium cabin flights AND confirmed Business/First booking "
+                "in DMO. Target with corporate travel programme, lounge access, priority boarding."
             )[:240],
             "requires_ir": True,
             "includeCriteria": _logic([
@@ -1677,6 +1773,10 @@ def airlines_segment_defs(prefix: str) -> list:
                     "premium_flights__c",
                     _num_cmp(f"{p}_FlightProfile__cio", "premium_flights__c",
                              "greater than or equal", 3),
+                ),
+                _dmo_filter(
+                    "FlightBooking__dlm", "PartyId__c", "CabinClass__c",
+                    "in", ["Business", "First"],
                 ),
             ]),
             "excludeCriteria": _logic([
@@ -1862,7 +1962,8 @@ def healthcare_segment_defs(prefix: str) -> list:
             "key":         f"{p}_AbnormalResults",
             "displayName": f"{p} Abnormal Results",
             "description": (
-                "Members with at least one abnormal lab result. Trigger follow-up appointment and specialist referral workflow."
+                "Members with at least one abnormal lab result (CI + LabResult DMO confirmed). "
+                "Trigger follow-up appointment and specialist referral workflow."
             )[:240],
             "requires_ir": True,
             "includeCriteria": _logic([
@@ -1871,6 +1972,10 @@ def healthcare_segment_defs(prefix: str) -> list:
                     "abnormal_results__c",
                     _num_cmp(f"{p}_HealthRiskProfile__cio", "abnormal_results__c",
                              "greater than or equal", 1),
+                ),
+                _dmo_filter(
+                    "LabResult__dlm", "PartyId__c", "IsAbnormal__c",
+                    "greater than or equal", 1,
                 ),
             ]),
             "excludeCriteria": _logic([]),
@@ -1937,7 +2042,8 @@ def sports_club_segment_defs(prefix: str) -> list:
             "key":         f"{p}_RenewalRisk",
             "displayName": f"{p} Renewal Risk",
             "description": (
-                "Members renewing within 90 days with elevated churn risk. Priority outreach to lock in renewal with a loyalty discount."
+                "Active members (DMO confirmed) renewing within 90 days with elevated churn risk. "
+                "Priority outreach to lock in renewal with a loyalty discount."
             )[:240],
             "requires_ir": True,
             "includeCriteria": _logic([
@@ -1952,6 +2058,10 @@ def sports_club_segment_defs(prefix: str) -> list:
                     "churn_score__c",
                     _num_cmp(f"{p}_CustomerRiskProfile__cio", "churn_score__c",
                              "greater than or equal", 50),
+                ),
+                _dmo_filter(
+                    "Membership__dlm", "PartyId__c", "Status__c",
+                    "in", ["Active"],
                 ),
             ]),
             "excludeCriteria": _logic([]),
@@ -2034,7 +2144,7 @@ def ecommerce_segment_defs(prefix: str) -> list:
             "key":         f"{p}_CartAbandoners",
             "displayName": f"{p} Cart Abandoners",
             "description": (
-                "Shoppers who abandoned a cart and placed at least one order. "
+                "Shoppers who abandoned a cart (value >= 50) and placed at least one order. "
                 "Re-engage with a cart-recovery email or a limited-time discount on abandoned items."
             )[:240],
             "requires_ir": True,
@@ -2050,6 +2160,10 @@ def ecommerce_segment_defs(prefix: str) -> list:
                     "total_orders__c",
                     _num_cmp(f"{p}_OrderProfile__cio", "total_orders__c",
                              "greater than or equal", 1),
+                ),
+                _dmo_filter(
+                    "CartAbandonment__dlm", "PartyId__c", "CartValue__c",
+                    "greater than or equal", 50,
                 ),
             ]),
             "excludeCriteria": _logic([]),
@@ -2169,8 +2283,8 @@ def hospitality_segment_defs(prefix: str) -> list:
             "key":         f"{p}_FrequentGuests",
             "displayName": f"{p} Frequent Guests",
             "description": (
-                "Guests with 3 or more stays. Reward with loyalty tier upgrade, "
-                "complimentary breakfast, or early check-in to deepen brand loyalty."
+                "Guests with 3+ stays and at least one completed stay confirmed in HotelStay DMO. "
+                "Reward with loyalty tier upgrade, complimentary breakfast, or early check-in."
             )[:240],
             "requires_ir": True,
             "includeCriteria": _logic([
@@ -2179,6 +2293,10 @@ def hospitality_segment_defs(prefix: str) -> list:
                     "total_stays__c",
                     _num_cmp(f"{p}_StayProfile__cio", "total_stays__c",
                              "greater than or equal", 3),
+                ),
+                _dmo_filter(
+                    "HotelStay__dlm", "PartyId__c", "Status__c",
+                    "in", ["Completed"],
                 ),
             ]),
             "excludeCriteria": _logic([
@@ -2348,7 +2466,7 @@ def media_segment_defs(prefix: str) -> list:
             "key":         f"{p}_BingeWatchers",
             "displayName": f"{p} Binge Watchers",
             "description": (
-                "Viewers with a completion rate >= 80% across their last sessions. "
+                "Active subscribers (DMO) with completion rate >= 80% across their last sessions. "
                 "Promote new series releases and exclusive early access content."
             )[:240],
             "requires_ir": True,
@@ -2358,6 +2476,10 @@ def media_segment_defs(prefix: str) -> list:
                     "completion_rate__c",
                     _num_cmp(f"{p}_ContentProfile__cio", "completion_rate__c",
                              "greater than or equal", 0.8),
+                ),
+                _dmo_filter(
+                    "Subscription__dlm", "PartyId__c", "Status__c",
+                    "in", ["Active"],
                 ),
             ]),
             "excludeCriteria": _logic([]),
@@ -2417,7 +2539,7 @@ def automotive_segment_defs(prefix: str) -> list:
             "key":         f"{p}_ServiceDue",
             "displayName": f"{p} Service Due",
             "description": (
-                "Customers whose last service visit was 180+ days ago. "
+                "Owners of active vehicles (Vehicle DMO) whose last service was 180+ days ago. "
                 "Remind with a personalised service invitation and an online booking link."
             )[:240],
             "requires_ir": True,
@@ -2427,6 +2549,10 @@ def automotive_segment_defs(prefix: str) -> list:
                     "days_since_last_service__c",
                     _num_cmp(f"{p}_ServiceProfile__cio", "days_since_last_service__c",
                              "greater than or equal", 180),
+                ),
+                _dmo_filter(
+                    "Vehicle__dlm", "PartyId__c", "Status__c",
+                    "in", ["Active"],
                 ),
             ]),
             "excludeCriteria": _logic([]),
@@ -2532,7 +2658,7 @@ def real_estate_segment_defs(prefix: str) -> list:
             "key":         f"{p}_ActiveSearchers",
             "displayName": f"{p} Active Searchers",
             "description": (
-                "Buyers/renters with 3+ property inquiries. "
+                "Buyers with 3+ property inquiries for House, Villa, or Apartment (DMO confirmed). "
                 "Prioritise with personalised property alerts and a dedicated agent assignment."
             )[:240],
             "requires_ir": True,
@@ -2542,6 +2668,10 @@ def real_estate_segment_defs(prefix: str) -> list:
                     "total_inquiries__c",
                     _num_cmp(f"{p}_InquiryProfile__cio", "total_inquiries__c",
                              "greater than or equal", 3),
+                ),
+                _dmo_filter(
+                    "PropertyInquiry__dlm", "PartyId__c", "PropertyType__c",
+                    "in", ["House", "Villa", "Apartment"],
                 ),
             ]),
             "excludeCriteria": _logic([]),
@@ -2640,7 +2770,7 @@ def betting_segment_defs(prefix: str) -> list:
             "key":         f"{p}_VIPPlayers",
             "displayName": f"{p} VIP Players",
             "description": (
-                "Players with total stake of £5,000+ over the last 720 days. "
+                "Players with £5,000+ total stake and an Active betting account (DMO confirmed). "
                 "Reward with VIP bonuses, dedicated account manager, and exclusive promotions."
             )[:240],
             "requires_ir": True,
@@ -2650,6 +2780,10 @@ def betting_segment_defs(prefix: str) -> list:
                     "total_staked__c",
                     _num_cmp(f"{p}_PlayerProfile__cio", "total_staked__c",
                              "greater than or equal", 5000),
+                ),
+                _dmo_filter(
+                    "BettingAccount__dlm", "PartyId__c", "AccountStatus__c",
+                    "in", ["Active"],
                 ),
             ]),
             "excludeCriteria": _logic([
