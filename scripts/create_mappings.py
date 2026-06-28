@@ -161,7 +161,7 @@ B2B_STANDARD_MAPPINGS = [
     # Account — company-level identity entity + ALL enrichment fields mapped directly.
     # Enrichment custom fields are added to ssot__Account__dlm via create_dmos.extend_standard_dmo().
     (
-        "Contacts",
+        "Accounts",
         "ssot__Account__dlm",
         [
             ("id",           "ssot__Id__c"),
@@ -196,7 +196,7 @@ B2B_STANDARD_MAPPINGS = [
     # AccountEmailAddress — B2B equivalent of ContactPointEmail
     # FK = ssot__AccountId__c (NOT ssot__PartyId__c — that field does not exist on this DMO)
     (
-        "Contact_Emails",
+        "Account_Emails",
         "ssot__AccountEmailAddress__dlm",
         [
             ("id",               "ssot__Id__c"),

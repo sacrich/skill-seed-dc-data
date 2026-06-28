@@ -534,11 +534,15 @@ def main():
                 return mapping[prefix_key]
         return default
 
+    b2b = cfg.get("b2b", False)
+    B2B_STEM_RENAME = {"contacts": "accounts", "contact_emails": "account_emails"}
+
     results = []
     for csv_path in csvs:
         stem = csv_path.stem  # e.g. "contacts" or "insurance_policies_2025_2026"
-        stream_name  = f"{prefix}_{stem.replace('_', ' ').title().replace(' ', '_')}"
-        stream_label = f"{cfg.get('clientName', prefix)} {stem.replace('_', ' ').title()}"
+        display_stem = B2B_STEM_RENAME.get(stem, stem) if b2b else stem
+        stream_name  = f"{prefix}_{display_stem.replace('_', ' ').title().replace(' ', '_')}"
+        stream_label = f"{cfg.get('clientName', prefix)} {display_stem.replace('_', ' ').title()}"
         category     = resolve_map(CATEGORY_MAP, stem, "Profile")
         pk_col       = resolve_map(PK_MAP, stem)
         event_field  = EVENT_DATE_MAP.get(stem) if category == "Engagement" else None
