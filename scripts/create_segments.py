@@ -1754,7 +1754,7 @@ def utilities_segment_defs(prefix: str) -> list:
 
 
 def airlines_segment_defs(prefix: str) -> list:
-    """5 airline / FFP segment definitions."""
+    """6 airline / FFP segment definitions."""
     p = prefix
 
     return [
@@ -1884,6 +1884,32 @@ def airlines_segment_defs(prefix: str) -> list:
                     "cancelled_bookings__c",
                     _num_cmp(f"{p}_CustomerRiskProfile__cio", "cancelled_bookings__c",
                              "greater than or equal", 2),
+                ),
+            ]),
+            "excludeCriteria": _logic([]),
+        },
+
+        # 6. Baggage Upsell
+        {
+            "key":         f"{p}_BaggageUpsell",
+            "displayName": f"{p} Baggage Upsell",
+            "description": (
+                "Passengers who purchased extra baggage but have never bought a seat upgrade. "
+                "High intent for comfort upsells — target with seat upgrade offer at booking."
+            )[:240],
+            "requires_ir": True,
+            "includeCriteria": _logic([
+                _ci_filter(
+                    f"{p}_AncillaryRevenue__cio",
+                    "baggage_purchases__c",
+                    _num_cmp(f"{p}_AncillaryRevenue__cio", "baggage_purchases__c",
+                             "greater than or equal", 1),
+                ),
+                _ci_filter(
+                    f"{p}_AncillaryRevenue__cio",
+                    "seat_revenue__c",
+                    _num_cmp(f"{p}_AncillaryRevenue__cio", "seat_revenue__c",
+                             "equal to", 0),
                 ),
             ]),
             "excludeCriteria": _logic([]),

@@ -630,6 +630,19 @@ INDUSTRY_CUSTOM_MAPPINGS = {
                 ("balance",        "Balance__c"),
             ],
         ),
+        (
+            "Ancillary_Sales",
+            "AncillarySale__dlm",
+            [
+                ("sale_id",        "Id__c"),
+                ("booking_id",     "BookingId__c"),
+                ("contact_id",     "PartyId__c"),
+                ("sale_datetime",  "SaleDatetime__c"),
+                ("ancillary_type", "AncillaryType__c"),
+                ("price",          "Price__c"),
+                ("route",          "Route__c"),
+            ],
+        ),
     ],
     "hightech": [
         (
@@ -944,7 +957,7 @@ def existing_mappings(core_url: str, token: str, dmos: list = None) -> dict:
         "WholesaleOrder__dlm", "WholesaleOrderLine__dlm",
         "HtSubscription__dlm", "HtUsageRecord__dlm", "HtSupportTicket__dlm",
         "UtilityContract__dlm", "ConsumptionRecord__dlm",
-        "FlightBooking__dlm",
+        "FlightBooking__dlm", "AncillarySale__dlm",
         "MedicalVisit__dlm", "LabResult__dlm",
         "Membership__dlm", "ActivityRecord__dlm",
         "EcomOrder__dlm", "EcomOrderLine__dlm", "CartAbandonment__dlm",

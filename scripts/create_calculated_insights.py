@@ -1150,10 +1150,48 @@ _AIRLINE_RISK_CI = {
     ),
 }
 
+_ANCILLARY_REVENUE_CI = {
+    "key":         "AncillaryRevenue",
+    "displayName": "{prefix} Ancillary Revenue",
+    "description": (
+        "Ancillary purchase profile per passenger. "
+        "Tracks total ancillary spend, revenue by category, and item count. "
+        "Powers upsell targeting for seat upgrades, baggage, and WiFi."
+    ),
+    "sql": (
+        "SELECT\n"
+        "    UnifiedssotIndividualRt__dlm.ssot__Id__c AS unified_individual__c,\n"
+        "    COUNT(AncillarySale__dlm.Id__c) AS ancillary_items__c,\n"
+        "    SUM(AncillarySale__dlm.Price__c) AS total_ancillary_revenue__c,\n"
+        "    SUM(CASE WHEN AncillarySale__dlm.AncillaryType__c = 'Extra Baggage'"
+        " THEN AncillarySale__dlm.Price__c ELSE 0 END) AS baggage_revenue__c,\n"
+        "    SUM(CASE WHEN AncillarySale__dlm.AncillaryType__c = 'Seat Upgrade'"
+        " THEN AncillarySale__dlm.Price__c ELSE 0 END) AS seat_revenue__c,\n"
+        "    SUM(CASE WHEN AncillarySale__dlm.AncillaryType__c = 'WiFi'"
+        " THEN AncillarySale__dlm.Price__c ELSE 0 END) AS wifi_revenue__c,\n"
+        "    SUM(CASE WHEN AncillarySale__dlm.AncillaryType__c = 'Meal'"
+        " THEN AncillarySale__dlm.Price__c ELSE 0 END) AS meal_revenue__c,\n"
+        "    SUM(CASE WHEN AncillarySale__dlm.AncillaryType__c = 'Lounge Access'"
+        " THEN AncillarySale__dlm.Price__c ELSE 0 END) AS lounge_revenue__c,\n"
+        "    SUM(CASE WHEN AncillarySale__dlm.AncillaryType__c = 'Extra Baggage'"
+        " THEN 1 ELSE 0 END) AS baggage_purchases__c\n"
+        + _UNIFIED_JOINS +
+        "JOIN AncillarySale__dlm\n"
+        "    ON AncillarySale__dlm.PartyId__c = UnifiedLinkssotIndividualRt__dlm.SourceRecordId__c\n"
+        "GROUP BY UnifiedssotIndividualRt__dlm.ssot__Id__c"
+    ),
+    "demo_use": (
+        "Baggage buyers no seat upgrade: baggage_purchases__c >= 1 AND seat_revenue__c = 0  ·  "
+        "High ancillary spenders: total_ancillary_revenue__c >= 100  ·  "
+        "No ancillaries: ancillary_items__c = 0"
+    ),
+}
+
 AIRLINES_CIS = [
     _FLIGHT_PROFILE_CI,
     _LOYALTY_PROFILE_CI,
     _AIRLINE_RISK_CI,
+    _ANCILLARY_REVENUE_CI,
     _ENGAGEMENT_CI,
 ]
 

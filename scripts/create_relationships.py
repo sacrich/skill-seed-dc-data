@@ -140,6 +140,7 @@ INDUSTRY_RELATIONSHIPS = {
     "airlines": [
         ("FlightBooking__dlm",    "PartyId__c", IND, "ssot__Id__c", "FlightBooking → Individual"),
         ("LoyaltyTransaction__dlm","PartyId__c", IND, "ssot__Id__c", "LoyaltyTransaction → Individual"),
+        ("AncillarySale__dlm",    "PartyId__c", IND, "ssot__Id__c", "AncillarySale → Individual"),
     ],
     # B2B Account model — parent is ssot__Account__dlm, NOT ssot__Individual__dlm
     "food_b2b": [

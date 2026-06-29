@@ -559,6 +559,25 @@ INDUSTRY_DMOS = {
                 field("Balance__c",         "Balance",          "Number"),
             ],
         },
+        {
+            "name": "AncillarySale",
+            "label": "Ancillary Sale",
+            "category": "ENGAGEMENT",
+            "description": (
+                "Individual ancillary service purchase linked to a flight booking. "
+                "Tracks seat upgrades, extra baggage, WiFi, meals, priority boarding, "
+                "and lounge access. Powers ancillary revenue CI and upsell segments."
+            ),
+            "fields": [
+                field("Id__c",             "Id",             "Text",     pk=True),
+                field("BookingId__c",      "Booking Id",     "Text"),
+                field("PartyId__c",        "Party Id",       "Text"),
+                field("SaleDatetime__c",   "Sale Datetime",  "DateTime"),  # REQUIRED — Engagement eventDateTimeFieldName
+                field("AncillaryType__c",  "Ancillary Type", "Text"),
+                field("Price__c",          "Price",          "Number"),
+                field("Route__c",          "Route",          "Text"),
+            ],
+        },
     ],
     "hightech": [
         {

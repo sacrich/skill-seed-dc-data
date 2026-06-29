@@ -59,6 +59,7 @@ CATEGORY_MAP = {
     "loyalty_transactions":  "Engagement",  # event_datetime (DateTime) — earn/redeem events
     "transactions":          "Engagement",  # tx_datetime (DateTime)    — banking spend events
     "flight_bookings":       "Engagement",  # booking_datetime (DateTime) — airlines
+    "ancillary_sales":       "Engagement",  # sale_datetime (DateTime)    — airlines ancillary
     # ── ENGAGEMENT (continued) — Transaction Journal events ─────────────────
     # Immutable purchase/fill events with DateTime — promoted from Other.
     # Subject to P2Y lookback — records older than 2 years become invisible to segments.
@@ -134,6 +135,7 @@ PK_MAP = {
     "ht_usage_records":     "usage_id",
     "ht_support_tickets":   "ticket_id",
     "flight_bookings":      "booking_id",
+    "ancillary_sales":      "sale_id",
     "utility_contracts":    "contract_id",
     "consumption_records":  "record_id",
     "medical_visits":       "visit_id",
@@ -170,6 +172,7 @@ EVENT_DATE_MAP = {
     "wholesale_orders":     "order_datetime",
     "prescriptions":        "fill_datetime",
     "flight_bookings":      "booking_datetime",
+    "ancillary_sales":      "sale_datetime",
     "activity_records":     "activity_date",
     "ecom_orders":          "order_datetime",
     "cart_abandonments":    "abandonment_datetime",

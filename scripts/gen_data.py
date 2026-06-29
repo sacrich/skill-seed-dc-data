@@ -1560,6 +1560,75 @@ def gen_airline_loyalty(contacts: list[dict], bookings: list[dict]) -> list[dict
     return _compute_loyalty_balance(rows)
 
 
+ANCILLARY_TYPES = [
+    "Seat Upgrade",
+    "Extra Baggage",
+    "WiFi",
+    "Meal",
+    "Priority Boarding",
+    "Lounge Access",
+]
+
+ANCILLARY_PRICE_RANGES: dict[str, tuple[float, float]] = {
+    "Seat Upgrade":      (30.0,  150.0),
+    "Extra Baggage":     (25.0,   80.0),
+    "WiFi":              (10.0,   25.0),
+    "Meal":              ( 8.0,   20.0),
+    "Priority Boarding": (10.0,   20.0),
+    "Lounge Access":     (40.0,   80.0),
+}
+
+
+def gen_ancillary_sales(contacts: list[dict], bookings: list[dict]) -> list[dict]:
+    """Generate ancillary purchases for ~35% of bookings (1-3 items each).
+
+    ENGAGEMENT stream: sale_datetime required (DateTime, P2Y window).
+    Route is derived from origin + destination of the parent booking.
+    """
+    rows: list[dict] = []
+
+    # Build a contact lookup for quick access (not strictly needed but mirrors pattern)
+    contact_ids = {c["id"] for c in contacts}
+
+    # Sample ~35% of bookings
+    sample_size = int(len(bookings) * 0.35)
+    sampled = random.sample(bookings, k=min(sample_size, len(bookings)))
+
+    for booking in sampled:
+        if booking["contact_id"] not in contact_ids:
+            continue
+
+        # Parse the booking datetime so ancillary can be same day or up to 3 days after
+        booking_dt_str = booking["booking_datetime"]
+        booking_dt = datetime.strptime(booking_dt_str, "%Y-%m-%dT%H:%M:%S.000Z")
+        route = f"{booking['origin']}-{booking['destination']}"
+
+        n_items = random.randint(1, 3)
+        chosen_types = random.sample(ANCILLARY_TYPES, k=min(n_items, len(ANCILLARY_TYPES)))
+
+        for anc_type in chosen_types:
+            # Sale is between 0 and 3 days after booking
+            offset_days = random.randint(0, 3)
+            offset_seconds = random.randint(0, 86399)
+            sale_dt = booking_dt + timedelta(days=offset_days, seconds=offset_seconds)
+            sale_dt_str = sale_dt.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+            lo, hi = ANCILLARY_PRICE_RANGES[anc_type]
+            price = round(random.uniform(lo, hi), 2)
+
+            rows.append({
+                "sale_id":        _uuid(),
+                "booking_id":     booking["booking_id"],
+                "contact_id":     booking["contact_id"],
+                "sale_datetime":  sale_dt_str,
+                "ancillary_type": anc_type,
+                "price":          price,
+                "route":          route,
+            })
+
+    return rows
+
+
 # ─── HEALTHCARE ──────────────────────────────────────────────────────────────
 
 MEDICAL_SPECIALTIES = [
@@ -2607,6 +2676,9 @@ def main():
         print("  Generating FFP loyalty miles...")
         loyalty = gen_airline_loyalty(contacts, bookings)
         write_csv(out_dir / "loyalty_transactions.csv", loyalty)
+        print("  Generating ancillary sales...")
+        ancillary_sales = gen_ancillary_sales(contacts, bookings)
+        write_csv(out_dir / "ancillary_sales.csv", ancillary_sales)
         _dslp = _days_since_map(bookings, "contact_id", "booking_datetime")
         for c in contacts:
             c["days_since_last_purchase"] = _dslp.get(c["id"], random.randint(30, 180))
