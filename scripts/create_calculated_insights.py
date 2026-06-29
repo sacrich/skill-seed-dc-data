@@ -682,7 +682,7 @@ PHARMA_CIS = [
         "sql": (
             "SELECT\n"
             "    UnifiedssotIndividualRt__dlm.ssot__Id__c AS unified_individual__c,\n"
-            "    AVG(CASE WHEN Prescription__dlm.Status__c = 'Active' THEN 1 ELSE 0 END) AS adherence_rate__c,\n"
+            "    SUM(CASE WHEN Prescription__dlm.Status__c = 'Active' THEN 1 ELSE 0 END) * 1.0 / NULLIF(COUNT(Prescription__dlm.Id__c), 0) AS adherence_rate__c,\n"
             "    SUM(CASE WHEN Prescription__dlm.Status__c = 'Active' THEN 1 ELSE 0 END) AS active_rx_count__c,\n"
             "    COUNT(Prescription__dlm.Id__c) AS total_rx__c\n"
             + _UNIFIED_JOINS +
@@ -1105,9 +1105,8 @@ _FLIGHT_PROFILE_CI = {
         "SELECT\n"
         "    UnifiedssotIndividualRt__dlm.ssot__Id__c AS unified_individual__c,\n"
         "    COUNT(FlightBooking__dlm.Id__c) AS total_flights__c,\n"
-        "    COUNT(DISTINCT CASE WHEN FlightBooking__dlm.Status__c = 'Completed' THEN FlightBooking__dlm.Id__c END) AS completed_flights__c,\n"
+        "    SUM(CASE WHEN FlightBooking__dlm.Status__c = 'Completed' THEN 1 ELSE 0 END) AS completed_flights__c,\n"
         "    SUM(CASE WHEN FlightBooking__dlm.Status__c = 'Completed' THEN FlightBooking__dlm.BaseFare__c ELSE 0 END) AS total_spend__c,\n"
-        "    AVG(CASE WHEN FlightBooking__dlm.Status__c = 'Completed' THEN FlightBooking__dlm.BaseFare__c END) AS avg_fare__c,\n"
         "    SUM(CASE WHEN FlightBooking__dlm.CabinClass__c IN ('Business','First') THEN 1 ELSE 0 END) AS premium_flights__c,\n"
         "    SUM(FlightBooking__dlm.MilesEarned__c) AS total_miles_earned__c\n"
         + _UNIFIED_JOINS +
@@ -1142,9 +1141,7 @@ _AIRLINE_RISK_CI = {
         "    ON ssot__Individual__dlm.ssot__Id__c = UnifiedLinkssotIndividualRt__dlm.SourceRecordId__c\n"
         "JOIN FlightBooking__dlm\n"
         "    ON FlightBooking__dlm.PartyId__c = UnifiedLinkssotIndividualRt__dlm.SourceRecordId__c\n"
-        "GROUP BY UnifiedssotIndividualRt__dlm.ssot__Id__c,\n"
-        "         ssot__Individual__dlm.ChurnScore__c, ssot__Individual__dlm.LoyaltyPointsBalance__c,\n"
-        "         ssot__Individual__dlm.DaysSinceLastPurchase__c"
+        "GROUP BY UnifiedssotIndividualRt__dlm.ssot__Id__c"
     ),
     "demo_use": (
         "Dormant with miles: days_since_last_flight__c > 180 AND miles_balance__c > 5000  ·  "
@@ -1521,7 +1518,7 @@ _CONTENT_PROFILE_CI = {
         "    UnifiedssotIndividualRt__dlm.ssot__Id__c AS unified_individual__c,\n"
         "    COUNT(ContentView__dlm.Id__c) AS total_views__c,\n"
         "    SUM(ContentView__dlm.DurationMinutes__c) AS total_watch_minutes__c,\n"
-        "    AVG(CASE WHEN ContentView__dlm.Completed__c = 'true' THEN 1.0 ELSE 0.0 END) AS completion_rate__c,\n"
+        "    SUM(CASE WHEN ContentView__dlm.Completed__c = 'true' THEN 1 ELSE 0 END) * 1.0 / NULLIF(COUNT(ContentView__dlm.Id__c), 0) AS completion_rate__c,\n"
         "    MAX(ContentView__dlm.Genre__c) AS top_genre__c\n"
         + _UNIFIED_JOINS +
         "JOIN ContentView__dlm\n"
@@ -1768,7 +1765,7 @@ _PLAYER_PROFILE_CI = {
         "    SUM(BettingTransaction__dlm.Stake__c) AS total_staked__c,\n"
         "    SUM(BettingTransaction__dlm.Payout__c) AS total_payout__c,\n"
         "    SUM(BettingTransaction__dlm.NetResult__c) AS net_result__c,\n"
-        "    AVG(CASE WHEN BettingTransaction__dlm.Payout__c > 0 THEN 1.0 ELSE 0.0 END) AS win_rate__c\n"
+        "    SUM(CASE WHEN BettingTransaction__dlm.Payout__c > 0 THEN 1 ELSE 0 END) * 1.0 / NULLIF(COUNT(BettingTransaction__dlm.Id__c), 0) AS win_rate__c\n"
         + _UNIFIED_JOINS +
         "JOIN BettingTransaction__dlm\n"
         "    ON BettingTransaction__dlm.PartyId__c = UnifiedLinkssotIndividualRt__dlm.SourceRecordId__c\n"

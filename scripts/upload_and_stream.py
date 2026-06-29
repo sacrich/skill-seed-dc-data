@@ -572,7 +572,12 @@ def main():
         else:
             display_stem = stem
         stream_name  = f"{prefix}_{display_stem.replace('_', ' ').title().replace(' ', '_')}"
-        stream_label = f"{cfg.get('clientName', prefix)} {display_stem.replace('_', ' ').title()}"
+        _label_suffix = display_stem.replace('_', ' ').title()
+        stream_label  = f"{cfg.get('clientName', prefix)} {_label_suffix}"
+        if len(stream_label) > 40:
+            stream_label = f"{prefix} {_label_suffix}"      # fall back to slug (shorter)
+        if len(stream_label) > 40:
+            stream_label = stream_label[:40]                 # hard truncate as last resort
         category     = resolve_map(CATEGORY_MAP, stem, "Profile")
         pk_col       = resolve_map(PK_MAP, stem)
         event_field  = EVENT_DATE_MAP.get(stem) if category == "Engagement" else None
