@@ -1,6 +1,6 @@
 ---
 name: seed-demo-data
-description: Interactive wizard that seeds a complete, production-quality synthetic industry dataset into Salesforce Data Cloud. Covers profiles, transactions, engagement events, custom DMOs with descriptions, field mappings, DMO relationships, Identity Resolution, Calculated Insights (industry-relevant, 6-hour schedule), and Segments (5 per industry, count-verified). Supports 18 verticals — insurance, food (B2C supermarkets), food_b2b (manufacturers/wholesale), retail, banking, pharma, telco, hightech (SaaS B2B), utilities, airlines, healthcare, sports_club, ecommerce (online marketplace), hospitality (hotels/resorts), media (streaming/pay-TV), automotive (dealerships/OEM), real_estate (buyers/renters), betting (sports betting/casino/lottery/poker).
+description: Interactive wizard that seeds a complete, production-quality synthetic industry dataset into Salesforce Data Cloud. Covers profiles, transactions, engagement events, custom DMOs with descriptions, field mappings, DMO relationships, Identity Resolution, Calculated Insights (industry-relevant, 6-hour schedule), and Segments (5 per industry, count-verified). Supports 19 verticals — insurance, food (B2C supermarkets), food_b2b (manufacturers/wholesale), retail, banking, pharma, telco, hightech (SaaS B2B), utilities, airlines, healthcare, sports_club, ecommerce (online marketplace), hospitality (hotels/resorts), media (streaming/pay-TV), automotive (dealerships/OEM), real_estate (buyers/renters), betting (sports betting/casino/lottery/poker), trading (retail brokerage/CFD platforms).
 ---
 
 # Seed Demo Data — Conversational Wizard
@@ -254,6 +254,7 @@ Auto-detect industry using **two signals in order**:
 - **automotive** *(B2C — dealerships/OEM)*: toyota, honda, ford, bmw, mercedes, audi, volkswagen, vw, tesla, hyundai, kia, renault, peugeot, citroen, seat, skoda, volvo, jaguar, lexus, dealer, dealership, auto, car
 - **real_estate** *(B2C — property buyers/renters)*: zillow, rightmove, zoopla, idealista, seloger, trulia, redfin, century21, coldwell banker, re/max, knight frank, jll, savills, real estate, property, realtor, estate agent, mordor
 - **betting** *(B2C — always B2C)*: bet365, betway, draftkings, fanduel, william hill, paddy power, betfair, unibet, 888sport, pointsbet, caesars, mgm, pokerstars, party casino, lottery, national lottery, eurobet, sisal, snai, bwin, ladbrokes, coral, skybet, betfred, sportbet, sports betting, online casino, poker
+- **trading** *(B2C — always B2C)*: etoro, plus500, avatrade, xtb, degiro, capital.com, trading212, ig group, saxo bank, interactive brokers, cmc markets, pepperstone, oanda, forex.com, binary.com, deriv, brokerage, broker, cfd, forex trading, stock trading, crypto trading, retail trading
 
 **Signal 2 — general knowledge (if no keyword match):**
 Use your own knowledge of the company. If you know it is a supermarket chain, insurance company, bank, etc. — apply the corresponding industry directly. Do NOT ask the user to clarify if you are confident.
@@ -270,9 +271,10 @@ Examples of Signal 2 in action:
 
 **B2C/B2B detection rules:**
 - `food_b2b` and `hightech` are **always B2B** — skip the B2C/B2B question, set `b2b: true` in config automatically.
-- `ecommerce`, `hospitality`, `media`, `automotive`, `real_estate`, and `betting` are **always B2C** — skip the B2C/B2B question.
+- `ecommerce`, `hospitality`, `media`, `automotive`, `real_estate`, `betting`, and `trading` are **always B2C** — skip the B2C/B2B question.
 - "airbnb" maps to `hospitality` (B2C) not `hightech`.
 - `betting` is always B2C — even if a name sounds enterprise, map to betting B2C (individuals place bets).
+- `trading` is always B2C — retail traders are individuals, not companies.
 - `insurance`, `food`, `retail`, `banking`, `pharma`, `telco` default to B2C — ask the question.
 
 If detected (B2C industry):
@@ -2172,6 +2174,53 @@ Industry key: `"betting"` — **always B2C** (even enterprise-sounding names map
 | `<Slug>_KYCPending` | RiskProfile.kyc_status = Pending | Prompt to complete identity verification |
 | `<Slug>_ChurnRisk` | CustomerValue.churn_score 65–89 | Personalised bonus tied to preferred game type |
 
+### Trading
+
+Industry key: `"trading"` — **always B2C** (retail traders are individuals; even institutional-sounding brand names map to B2C).
+
+**Story:** *"We are a retail brokerage / CFD platform. Data Cloud helps us re-engage funded-dormant traders, complete KYC flows, protect high-value traders at churn risk, convert first-depositors into active traders, and offer premium account upgrades to profitable traders."*
+
+**Model:** B2C — one Individual per trader. Trade and DepositWithdrawal are ENGAGEMENT (immutable timestamped events). TradingAccount is OTHER (mutable account holding).
+
+**Streams (N = number of contacts):**
+
+| Stream | Category | PK | Key fields | Rows |
+|--------|----------|----|-----------|------|
+| `<Slug>_Contacts` | Profile | `id` | first_name, last_name, email, city, churn_score, ltv, days_since_last_purchase | N |
+| `<Slug>_Contact_Emails` | Profile | `id` | contact_id, email | N |
+| `<Slug>_Trading_Accounts` | **Other** | `account_id` | contact_id, account_type (Standard/Premium/ECN/Demo), kyc_status (Verified/Pending/Failed), registration_date (Date), balance, equity, margin_used, leverage, account_status (Active/Suspended/Closed) | N |
+| `<Slug>_Trades` | **Engagement** | `trade_id` | contact_id, account_id, **trade_datetime (DateTime REQUIRED)**, instrument (EUR/USD/AAPL/BTC/USD/…), asset_class (Forex/Stock/Crypto/Commodity/Index), direction (Buy/Sell), lot_size, open_price, close_price, pnl, trade_status (Open/Closed) | N×5–40 avg N×15 |
+| `<Slug>_Deposits_Withdrawals` | **Engagement** | `tx_id` | contact_id, account_id, **tx_datetime (DateTime REQUIRED)**, tx_type (Deposit/Withdrawal), amount, currency, payment_method (Bank Transfer/Credit Card/Debit Card/E-Wallet/Crypto), tx_status (Completed/Pending/Failed) | N×1–12 avg N×5 |
+| `<Slug>_Email_Engagement` | **Engagement** | `event_id` | contact_id, **sent_date (DateTime)**, campaign_name, opened, clicked | N×8 |
+| `<Slug>_Web_Engagement` | **Engagement** | `event_id` | contact_id, **event_datetime (DateTime REQUIRED)**, page_url, page_category, event_type, device_type, duration_seconds | N×10 avg |
+
+**Custom DMOs:** `TradingAccount__dlm` (OTHER), `Trade__dlm` (ENGAGEMENT), `DepositWithdrawal__dlm` (ENGAGEMENT)
+
+**Relationships:**
+- `TradingAccount → Individual` (PartyId__c → ssot__Id__c)
+- `Trade → Individual` (PartyId__c → ssot__Id__c)
+- `Trade → TradingAccount` (AccountId__c → Id__c)
+- `DepositWithdrawal → Individual` (PartyId__c → ssot__Id__c)
+- Standard EmailEngagement → Individual, WebsiteEngagement → Individual
+
+**CIs (5):**
+| CI | Key measures | Demo use |
+|----|-------------|---------|
+| `<Slug>_TradingAccountProfile__cio` | total_accounts__c, active_accounts__c, kyc_pending_count__c, total_balance__c, total_equity__c, total_margin_used__c | KYC pending: kyc_pending_count ≥ 1 · Funded: total_balance > 0 · High balance: ≥ 10 000 |
+| `<Slug>_TradingActivity__cio` | total_trades__c, open_trades__c, closed_trades__c, total_pnl__c, win_rate__c | Active: closed_trades ≥ 5 · Profitable: total_pnl > 0 · High win rate: ≥ 60 % |
+| `<Slug>_DepositProfile__cio` | total_deposits__c, total_withdrawals__c, net_funding__c, deposit_count__c, withdrawal_count__c | First deposit: deposit_count ≥ 1 · High funder: total_deposits ≥ 5 000 |
+| `<Slug>_TraderRiskProfile__cio` | total_leverage__c, margin_utilisation_rate__c, churn_score__c | High margin util: ≥ 70 % · Churn risk: churn_score ≥ 65 |
+| `<Slug>_EngagementScore__cio` | emails_received__c, emails_opened__c, emails_clicked__c | Email engagement |
+
+**Segments (5):**
+| Segment | Logic | Story |
+|---------|-------|-------|
+| `<Slug>_FundedDormant` | TradingAccountProfile.total_balance > 0 AND TradingActivity.closed_trades < 1 | First-trade incentive, platform walkthrough, or market signal alert |
+| `<Slug>_KYCPending` | TradingAccountProfile.kyc_pending_count ≥ 1 (DMO confirmed KYCStatus = Pending) | Verification reminder with step-by-step guide to unlock full trading |
+| `<Slug>_HighValueAtRisk` | TradingAccountProfile.total_balance ≥ 10 000 AND TraderRiskProfile.churn_score ≥ 65 | Personal account manager call or retention bonus |
+| `<Slug>_FirstDepositNoTrade` | DepositProfile.deposit_count ≥ 1 AND TradingActivity.total_trades < 1 | Welcome journey with guided first-trade offer or demo account tour |
+| `<Slug>_ExpansionCandidates` | TradingActivity.closed_trades ≥ 5 AND win_rate ≥ 0.6 AND total_pnl > 0 | Premium account upgrade, higher leverage tiers, exclusive market research |
+
 ---
 
 ## IMPORTANT GOTCHAS (handle silently)
@@ -2201,6 +2250,8 @@ Industry key: `"betting"` — **always B2C** (even enterprise-sounding names map
 - `content_views` (media) → `view_datetime` (DateTime)
 - `property_inquiries` (real_estate) → `inquiry_datetime` (DateTime)
 - `betting_transactions` (betting) → `transaction_datetime` (DateTime)
+- `trades` (trading) → `trade_datetime` (DateTime)
+- `deposits_withdrawals` (trading) → `tx_datetime` (DateTime)
 
 **Which streams are Other (not Engagement):**
 - Everything contractual or mutable: policies, claims, order lines, financial accounts, banking products, service contracts, subscriptions, usage records, memberships

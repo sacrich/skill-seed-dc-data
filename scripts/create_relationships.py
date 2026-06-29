@@ -193,6 +193,12 @@ INDUSTRY_RELATIONSHIPS = {
         ("Parcel__dlm",        "PartyId__c", IND, "ssot__Id__c", "Parcel → Individual"),
         ("PostalProduct__dlm", "PartyId__c", IND, "ssot__Id__c", "PostalProduct → Individual"),
     ],
+    "trading": [
+        ("TradingAccount__dlm",    "PartyId__c",  IND,                    "ssot__Id__c", "TradingAccount → Individual"),
+        ("Trade__dlm",             "PartyId__c",  IND,                    "ssot__Id__c", "Trade → Individual"),
+        ("Trade__dlm",             "AccountId__c","TradingAccount__dlm",  "Id__c",       "Trade → TradingAccount"),
+        ("DepositWithdrawal__dlm", "PartyId__c",  IND,                    "ssot__Id__c", "DepositWithdrawal → Individual"),
+    ],
 }
 
 

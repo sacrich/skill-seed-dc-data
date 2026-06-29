@@ -3029,6 +3029,141 @@ def postal_segment_defs(prefix: str) -> list:
     ]
 
 
+def trading_segment_defs(prefix: str) -> list:
+    p = prefix
+    return [
+        # 1. FundedDormant
+        {
+            "key":         f"{p}_FundedDormant",
+            "displayName": f"{p} Funded Dormant",
+            "description": (
+                "Traders with a positive account balance but zero closed trades. "
+                "Re-engage with a first-trade incentive, platform walkthrough, or market signal alert."
+            )[:240],
+            "requires_ir": True,
+            "includeCriteria": _logic([
+                _ci_filter(
+                    f"{p}_TradingAccountProfile__cio",
+                    "total_balance__c",
+                    _num_cmp(f"{p}_TradingAccountProfile__cio", "total_balance__c",
+                             "greater than", 0),
+                ),
+                _ci_filter(
+                    f"{p}_TradingActivity__cio",
+                    "closed_trades__c",
+                    _num_cmp(f"{p}_TradingActivity__cio", "closed_trades__c",
+                             "less than", 1),
+                ),
+            ]),
+            "excludeCriteria": _logic([]),
+        },
+        # 2. KYCPending
+        {
+            "key":         f"{p}_KYCPending",
+            "displayName": f"{p} KYC Pending",
+            "description": (
+                "Traders with at least one account in KYC Pending status (DMO confirmed). "
+                "Send a verification reminder with a step-by-step guide to unlock full trading access."
+            )[:240],
+            "requires_ir": True,
+            "includeCriteria": _logic([
+                _ci_filter(
+                    f"{p}_TradingAccountProfile__cio",
+                    "kyc_pending_count__c",
+                    _num_cmp(f"{p}_TradingAccountProfile__cio", "kyc_pending_count__c",
+                             "greater than or equal", 1),
+                ),
+                _dmo_filter(
+                    "TradingAccount__dlm", "PartyId__c", "KYCStatus__c",
+                    "in", ["Pending"],
+                ),
+            ]),
+            "excludeCriteria": _logic([]),
+        },
+        # 3. HighValueAtRisk
+        {
+            "key":         f"{p}_HighValueAtRisk",
+            "displayName": f"{p} High Value At Risk",
+            "description": (
+                "High-balance traders (10 000+ total balance) with a churn score of 65 or above. "
+                "Prioritise for a personal account manager call or retention bonus offer."
+            )[:240],
+            "requires_ir": True,
+            "includeCriteria": _logic([
+                _ci_filter(
+                    f"{p}_TradingAccountProfile__cio",
+                    "total_balance__c",
+                    _num_cmp(f"{p}_TradingAccountProfile__cio", "total_balance__c",
+                             "greater than or equal", 10000),
+                ),
+                _ci_filter(
+                    f"{p}_TraderRiskProfile__cio",
+                    "churn_score__c",
+                    _num_cmp(f"{p}_TraderRiskProfile__cio", "churn_score__c",
+                             "greater than or equal", 65),
+                ),
+            ]),
+            "excludeCriteria": _logic([]),
+        },
+        # 4. FirstDepositNoTrade
+        {
+            "key":         f"{p}_FirstDepositNoTrade",
+            "displayName": f"{p} First Deposit No Trade",
+            "description": (
+                "Traders who have made at least one deposit but have zero total trades. "
+                "Trigger a welcome journey with a guided first-trade offer or demo account tour."
+            )[:240],
+            "requires_ir": True,
+            "includeCriteria": _logic([
+                _ci_filter(
+                    f"{p}_DepositProfile__cio",
+                    "deposit_count__c",
+                    _num_cmp(f"{p}_DepositProfile__cio", "deposit_count__c",
+                             "greater than or equal", 1),
+                ),
+                _ci_filter(
+                    f"{p}_TradingActivity__cio",
+                    "total_trades__c",
+                    _num_cmp(f"{p}_TradingActivity__cio", "total_trades__c",
+                             "less than", 1),
+                ),
+            ]),
+            "excludeCriteria": _logic([]),
+        },
+        # 5. ExpansionCandidates
+        {
+            "key":         f"{p}_ExpansionCandidates",
+            "displayName": f"{p} Expansion Candidates",
+            "description": (
+                "Active traders with 5+ closed trades and a win rate above 60 % and positive P&L. "
+                "Offer premium account upgrade, higher leverage tiers, or exclusive market research."
+            )[:240],
+            "requires_ir": True,
+            "includeCriteria": _logic([
+                _ci_filter(
+                    f"{p}_TradingActivity__cio",
+                    "closed_trades__c",
+                    _num_cmp(f"{p}_TradingActivity__cio", "closed_trades__c",
+                             "greater than or equal", 5),
+                ),
+                _ci_filter(
+                    f"{p}_TradingActivity__cio",
+                    "win_rate__c",
+                    _num_cmp(f"{p}_TradingActivity__cio", "win_rate__c",
+                             "greater than or equal", 0.6),
+                ),
+                _ci_filter(
+                    f"{p}_TradingActivity__cio",
+                    "total_pnl__c",
+                    _num_cmp(f"{p}_TradingActivity__cio", "total_pnl__c",
+                             "greater than", 0),
+                ),
+            ]),
+            "excludeCriteria": _logic([]),
+        },
+    ]
+
+
 # ─── Industry dispatch ────────────────────────────────────────────────────────
 
 SEGMENT_DEFS_MAP = {
@@ -3051,6 +3186,7 @@ SEGMENT_DEFS_MAP = {
     "real_estate": real_estate_segment_defs,
     "betting":     betting_segment_defs,
     "postal":      postal_segment_defs,
+    "trading":     trading_segment_defs,
 }
 
 

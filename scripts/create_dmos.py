@@ -971,6 +971,77 @@ INDUSTRY_DMOS = {
             ],
         },
     ],
+    "trading": [
+        {
+            "name": "TradingAccount",
+            "label": "Trading Account",
+            "description": (
+                "Individual retail trading account. Tracks account type, balance, equity, "
+                "margin used, leverage, KYC status, and account status. "
+                "Powers account profile and trader risk segmentation."
+            ),
+            "category": "Other",
+            "fields": [
+                field("Id__c",         "Id",          "Text"),
+                field("PartyId__c",    "Party Id",    "Text"),
+                field("AccountType__c","Account Type","Text"),
+                field("Balance__c",    "Balance",     "Number"),
+                field("Equity__c",     "Equity",      "Number"),
+                field("MarginUsed__c", "Margin Used", "Number"),
+                field("Leverage__c",   "Leverage",    "Number"),
+                field("KycStatus__c",  "Kyc Status",  "Text"),
+                field("Status__c",     "Status",      "Text"),
+                field("OpenedDate__c", "Opened Date", "Date"),
+            ],
+        },
+        {
+            "name": "Trade",
+            "label": "Trade",
+            "description": (
+                "Individual trade event (ENGAGEMENT). Tracks instrument, direction, "
+                "quantity, open/close price, P&L, and duration. "
+                "TradeDatetime is the event datetime for P2Y lookback. "
+                "Powers trading activity and profitability CIs and trader segmentation."
+            ),
+            "category": "Engagement",
+            "fields": [
+                field("Id__c",              "Id",              "Text"),
+                field("PartyId__c",         "Party Id",        "Text"),
+                field("AccountId__c",       "Account Id",      "Text"),
+                field("TradeDatetime__c",   "Trade Datetime",  "DateTime"),
+                field("Instrument__c",      "Instrument",      "Text"),
+                field("InstrumentType__c",  "Instrument Type", "Text"),
+                field("Direction__c",       "Direction",       "Text"),
+                field("Quantity__c",        "Quantity",        "Number"),
+                field("OpenPrice__c",       "Open Price",      "Number"),
+                field("ClosePrice__c",      "Close Price",     "Number"),
+                field("Pnl__c",             "Pnl",             "Number"),
+                field("Status__c",          "Status",          "Text"),
+                field("DurationHours__c",   "Duration Hours",  "Number"),
+            ],
+        },
+        {
+            "name": "DepositWithdrawal",
+            "label": "Deposit Withdrawal",
+            "description": (
+                "Deposit and withdrawal transaction per trader (ENGAGEMENT). "
+                "Tracks transaction type, amount, payment method, and status. "
+                "TxDatetime is the event datetime for P2Y lookback. "
+                "Powers net funding, deposit frequency, and reactivation segmentation."
+            ),
+            "category": "Engagement",
+            "fields": [
+                field("Id__c",        "Id",         "Text"),
+                field("PartyId__c",   "Party Id",   "Text"),
+                field("AccountId__c", "Account Id", "Text"),
+                field("TxDatetime__c","Tx Datetime","DateTime"),
+                field("TxType__c",    "Tx Type",    "Text"),
+                field("Amount__c",    "Amount",     "Number"),
+                field("Method__c",    "Method",     "Text"),
+                field("Status__c",    "Status",     "Text"),
+            ],
+        },
+    ],
 }
 
 

@@ -416,6 +416,12 @@ CAMPAIGN_CATALOG["airlines"] = [
     {"id": "CAMP-AIR-03", "name": "Flash Sale", "subject": "48-Hour Flash Sale — Up to 40% Off Selected Routes", "open_rate": 0.50, "click_rate": 0.30},
     {"id": "CAMP-AIR-04", "name": "Upgrade Offer", "subject": "Bid on a Business Class Upgrade for Your Next Flight", "open_rate": 0.42, "click_rate": 0.22},
 ]
+CAMPAIGN_CATALOG["trading"] = [
+    {"id": "CAMP-TRD-01", "name": "Market Opportunity", "subject": "Markets Are Moving — Are You Ready to Trade?", "open_rate": 0.42, "click_rate": 0.24},
+    {"id": "CAMP-TRD-02", "name": "Deposit Bonus", "subject": "Fund Your Account and Get a 20% Deposit Bonus", "open_rate": 0.50, "click_rate": 0.30},
+    {"id": "CAMP-TRD-03", "name": "KYC Reminder", "subject": "Complete Your Verification to Unlock Full Trading", "open_rate": 0.65, "click_rate": 0.45},
+    {"id": "CAMP-TRD-04", "name": "Platform Feature", "subject": "New: Advanced Charting Tools Now Available", "open_rate": 0.38, "click_rate": 0.20},
+]
 
 
 # ─── WEB ENGAGEMENT ──────────────────────────────────────────────────────────
@@ -519,6 +525,16 @@ WEB_PAGE_CATALOG["airlines"] = [
     {"url": "/check-in",                   "category": "Self-Service"},
     {"url": "/baggage",                    "category": "Self-Service"},
     {"url": "/special-offers",             "category": "Promotions"},
+]
+WEB_PAGE_CATALOG["trading"] = [
+    {"url": "/trade/forex",                "category": "Markets"},
+    {"url": "/trade/stocks",               "category": "Markets"},
+    {"url": "/trade/crypto",               "category": "Markets"},
+    {"url": "/trade/commodities",          "category": "Markets"},
+    {"url": "/platform/charts",            "category": "Platform"},
+    {"url": "/account/deposit",            "category": "Self-Service"},
+    {"url": "/account/portfolio",          "category": "Self-Service"},
+    {"url": "/education/trading-academy",  "category": "Content"},
 ]
 
 WEB_EVENT_TYPES = ["page_view", "page_view", "page_view", "click_cta", "search", "video_watch", "download"]
@@ -2349,6 +2365,120 @@ def gen_betting_transactions(contacts: list) -> list:
     return rows
 
 
+# ─── TRADING generators ──────────────────────────────────────────────────────
+
+TRADING_INSTRUMENTS = [
+    ("EUR/USD",  "Forex"),
+    ("GBP/USD",  "Forex"),
+    ("USD/JPY",  "Forex"),
+    ("XAU/USD",  "Commodity"),
+    ("OIL/USD",  "Commodity"),
+    ("AAPL",     "Stock"),
+    ("TSLA",     "Stock"),
+    ("AMZN",     "Stock"),
+    ("BTC/USD",  "Crypto"),
+    ("ETH/USD",  "Crypto"),
+    ("SPX500",   "Index"),
+    ("NAS100",   "Index"),
+]
+
+TRADING_ACCOUNT_TYPES = ["Standard", "Premium", "ECN", "Demo"]
+TRADING_ACCOUNT_TYPE_W = [0.50, 0.25, 0.15, 0.10]
+TRADING_KYC_STATUSES = ["Verified", "Pending", "Failed"]
+TRADING_KYC_W = [0.75, 0.20, 0.05]
+TRADING_ACCOUNT_STATUSES = ["Active", "Suspended", "Closed"]
+TRADING_ACCOUNT_STATUS_W = [0.80, 0.12, 0.08]
+TRADING_DIRECTIONS = ["Buy", "Sell"]
+TRADING_TRADE_STATUSES = ["Closed", "Closed", "Closed", "Open"]
+TRADING_TX_TYPES = ["Deposit", "Deposit", "Deposit", "Withdrawal"]
+TRADING_METHODS = ["Bank Transfer", "Credit Card", "Debit Card", "E-Wallet", "Crypto"]
+
+
+def gen_trading_accounts(contacts: list) -> list:
+    """Generate one retail trading account per contact (OTHER stream)."""
+    rows = []
+    for c in contacts:
+        opened_days_ago = random.randint(30, 1460)
+        opened_date = (datetime.today() - timedelta(days=opened_days_ago)).strftime("%Y-%m-%d")
+        account_type = random.choices(TRADING_ACCOUNT_TYPES, weights=TRADING_ACCOUNT_TYPE_W)[0]
+        balance = round(random.uniform(0, 50000), 2)
+        equity = round(balance * random.uniform(0.8, 1.2), 2)
+        margin_used = round(equity * random.uniform(0, 0.6), 2)
+        leverage = random.choice([1, 5, 10, 20, 30, 50, 100, 200])
+        kyc_status = random.choices(TRADING_KYC_STATUSES, weights=TRADING_KYC_W)[0]
+        status = random.choices(TRADING_ACCOUNT_STATUSES, weights=TRADING_ACCOUNT_STATUS_W)[0]
+        rows.append({
+            "account_id":  _uuid(),
+            "contact_id":  c["id"],
+            "account_type": account_type,
+            "balance":     balance,
+            "equity":      equity,
+            "margin_used": margin_used,
+            "leverage":    leverage,
+            "kyc_status":  kyc_status,
+            "status":      status,
+            "opened_date": opened_date,
+        })
+    return rows
+
+
+def gen_trades(contacts: list) -> list:
+    """Generate trade events per trader (ENGAGEMENT stream, 720-day window)."""
+    rows = []
+    for c in contacts:
+        n_trades = random.randint(1, 50)
+        for _ in range(n_trades):
+            instrument, instr_type = random.choice(TRADING_INSTRUMENTS)
+            direction = random.choice(TRADING_DIRECTIONS)
+            quantity = round(random.uniform(0.01, 10.0), 2)
+            open_price = round(random.uniform(1, 50000), 4)
+            # simulate price movement
+            price_move = open_price * random.uniform(-0.10, 0.10)
+            close_price = round(open_price + price_move, 4)
+            pnl = round((close_price - open_price) * quantity * (1 if direction == "Buy" else -1), 2)
+            duration_hours = round(random.uniform(0.1, 72.0), 1)
+            status = random.choice(TRADING_TRADE_STATUSES)
+            rows.append({
+                "trade_id":        _uuid(),
+                "contact_id":      c["id"],
+                "account_id":      "",   # populated via account join in real use
+                "trade_datetime":  _recent_datetime(720),
+                "instrument":      instrument,
+                "instrument_type": instr_type,
+                "direction":       direction,
+                "quantity":        quantity,
+                "open_price":      open_price,
+                "close_price":     close_price,
+                "pnl":             pnl,
+                "status":          status,
+                "duration_hours":  duration_hours,
+            })
+    return rows
+
+
+def gen_deposits_withdrawals(contacts: list) -> list:
+    """Generate deposit and withdrawal transactions (ENGAGEMENT stream, 720-day window)."""
+    rows = []
+    for c in contacts:
+        n_txs = random.randint(1, 10)
+        for _ in range(n_txs):
+            tx_type = random.choice(TRADING_TX_TYPES)
+            amount = round(random.uniform(50, 10000), 2)
+            tx_status = random.choices(["Completed", "Pending", "Failed"],
+                                       weights=[0.85, 0.10, 0.05])[0]
+            rows.append({
+                "tx_id":         _uuid(),
+                "contact_id":    c["id"],
+                "account_id":    "",   # populated via account join in real use
+                "tx_datetime":   _recent_datetime(720),
+                "tx_type":       tx_type,
+                "amount":        amount,
+                "method":        random.choice(TRADING_METHODS),
+                "status":        tx_status,
+            })
+    return rows
+
+
 # ─── Postal ───────────────────────────────────────────────────────────────────
 
 POSTAL_STATUSES   = ["Delivered", "In Transit", "Out for Delivery", "Failed", "Returned"]
@@ -2422,6 +2552,7 @@ PRODUCT_AFFINITY_CATALOG: dict[str, list[str]] = {
     "real_estate": ["Apartment", "House", "Villa", "Studio", "Penthouse"],
     "betting":     ["Sports Betting", "Casino", "Poker", "Lottery", "Virtual Sports"],
     "postal":      ["Standard", "Express", "Registered", "PO Box", "Digital Mailbox"],
+    "trading":     ["Forex", "Stocks", "Crypto", "Commodities", "Indices"],
 }
 
 
@@ -2794,6 +2925,20 @@ def main():
         _dslp = _days_since_map(parcels, "contact_id", "ship_datetime")
         for c in contacts:
             c["days_since_last_purchase"] = _dslp.get(c["id"], random.randint(30, 180))
+
+    elif industry == "trading":
+        print("  Generating trading accounts...")
+        trading_accounts = gen_trading_accounts(contacts)
+        write_csv(out_dir / "trading_accounts.csv", trading_accounts)
+        print("  Generating trades...")
+        trades = gen_trades(contacts)
+        write_csv(out_dir / "trades.csv", trades)
+        print("  Generating deposits and withdrawals...")
+        deposits_withdrawals = gen_deposits_withdrawals(contacts)
+        write_csv(out_dir / "deposits_withdrawals.csv", deposits_withdrawals)
+        _dslp = _days_since_map(trades, "contact_id", "trade_datetime")
+        for c in contacts:
+            c["days_since_last_purchase"] = _dslp.get(c["id"], random.randint(1, 60))
 
     else:
         # fallback: just contacts + email engagement

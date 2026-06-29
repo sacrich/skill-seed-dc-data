@@ -1916,6 +1916,135 @@ POSTAL_CIS = [
     _ENGAGEMENT_CI,
 ]
 
+# ─── Trading ──────────────────────────────────────────────────────────────────
+
+_TRADING_ACCOUNT_PROFILE_CI = {
+    "key":         "TradingAccountProfile",
+    "displayName": "{prefix} Trading Account Profile",
+    "description": (
+        "Account-level snapshot per trader: account type, KYC status, current balance, "
+        "equity, margin used, and account status. "
+        "Powers KYC-completion, funded-dormant, and high-value segmentation."
+    ),
+    "sql": (
+        "SELECT\n"
+        "    UnifiedssotIndividualRt__dlm.ssot__Id__c AS unified_individual__c,\n"
+        "    COUNT(TradingAccount__dlm.Id__c) AS total_accounts__c,\n"
+        "    SUM(CASE WHEN TradingAccount__dlm.AccountStatus__c = 'Active' THEN 1 ELSE 0 END) AS active_accounts__c,\n"
+        "    SUM(CASE WHEN TradingAccount__dlm.KYCStatus__c = 'Pending' THEN 1 ELSE 0 END) AS kyc_pending_count__c,\n"
+        "    SUM(TradingAccount__dlm.Balance__c) AS total_balance__c,\n"
+        "    SUM(TradingAccount__dlm.Equity__c) AS total_equity__c,\n"
+        "    SUM(TradingAccount__dlm.MarginUsed__c) AS total_margin_used__c\n"
+        + _UNIFIED_JOINS +
+        "JOIN TradingAccount__dlm\n"
+        "    ON TradingAccount__dlm.PartyId__c = UnifiedLinkssotIndividualRt__dlm.SourceRecordId__c\n"
+        "GROUP BY UnifiedssotIndividualRt__dlm.ssot__Id__c"
+    ),
+    "demo_use": (
+        "KYC pending: kyc_pending_count__c >= 1  ·  "
+        "Funded: total_balance__c > 0  ·  "
+        "High balance: total_balance__c >= 10000"
+    ),
+}
+
+_TRADING_ACTIVITY_CI = {
+    "key":         "TradingActivity",
+    "displayName": "{prefix} Trading Activity",
+    "description": (
+        "Trade history aggregates per trader: total trades, open trades, closed trades, "
+        "total P&L, win rate, and most-traded instrument category. "
+        "Powers active-trader, profitable, and dormant segmentation."
+    ),
+    "sql": (
+        "SELECT\n"
+        "    UnifiedssotIndividualRt__dlm.ssot__Id__c AS unified_individual__c,\n"
+        "    COUNT(Trade__dlm.Id__c) AS total_trades__c,\n"
+        "    SUM(CASE WHEN Trade__dlm.TradeStatus__c = 'Open' THEN 1 ELSE 0 END) AS open_trades__c,\n"
+        "    SUM(CASE WHEN Trade__dlm.TradeStatus__c = 'Closed' THEN 1 ELSE 0 END) AS closed_trades__c,\n"
+        "    SUM(Trade__dlm.PnL__c) AS total_pnl__c,\n"
+        "    SUM(CASE WHEN Trade__dlm.PnL__c > 0 THEN 1 ELSE 0 END) * 1.0\n"
+        "        / NULLIF(SUM(CASE WHEN Trade__dlm.TradeStatus__c = 'Closed' THEN 1 ELSE 0 END), 0) AS win_rate__c\n"
+        + _UNIFIED_JOINS +
+        "JOIN Trade__dlm\n"
+        "    ON Trade__dlm.PartyId__c = UnifiedLinkssotIndividualRt__dlm.SourceRecordId__c\n"
+        "GROUP BY UnifiedssotIndividualRt__dlm.ssot__Id__c"
+    ),
+    "demo_use": (
+        "Active traders: total_trades__c >= 5  ·  "
+        "Profitable: total_pnl__c > 0  ·  "
+        "High win rate: win_rate__c >= 0.6"
+    ),
+}
+
+_DEPOSIT_PROFILE_CI = {
+    "key":         "DepositProfile",
+    "displayName": "{prefix} Deposit Profile",
+    "description": (
+        "Deposit and withdrawal summary per trader: total deposits, total withdrawals, "
+        "net funding, deposit count, and withdrawal count. "
+        "Powers first-deposit, high-value, and withdrawal-risk segmentation."
+    ),
+    "sql": (
+        "SELECT\n"
+        "    UnifiedssotIndividualRt__dlm.ssot__Id__c AS unified_individual__c,\n"
+        "    SUM(CASE WHEN DepositWithdrawal__dlm.TxType__c = 'Deposit' THEN DepositWithdrawal__dlm.Amount__c ELSE 0 END) AS total_deposits__c,\n"
+        "    SUM(CASE WHEN DepositWithdrawal__dlm.TxType__c = 'Withdrawal' THEN DepositWithdrawal__dlm.Amount__c ELSE 0 END) AS total_withdrawals__c,\n"
+        "    SUM(CASE WHEN DepositWithdrawal__dlm.TxType__c = 'Deposit' THEN DepositWithdrawal__dlm.Amount__c ELSE 0 END)\n"
+        "      - SUM(CASE WHEN DepositWithdrawal__dlm.TxType__c = 'Withdrawal' THEN DepositWithdrawal__dlm.Amount__c ELSE 0 END) AS net_funding__c,\n"
+        "    SUM(CASE WHEN DepositWithdrawal__dlm.TxType__c = 'Deposit' THEN 1 ELSE 0 END) AS deposit_count__c,\n"
+        "    SUM(CASE WHEN DepositWithdrawal__dlm.TxType__c = 'Withdrawal' THEN 1 ELSE 0 END) AS withdrawal_count__c\n"
+        + _UNIFIED_JOINS +
+        "JOIN DepositWithdrawal__dlm\n"
+        "    ON DepositWithdrawal__dlm.PartyId__c = UnifiedLinkssotIndividualRt__dlm.SourceRecordId__c\n"
+        "GROUP BY UnifiedssotIndividualRt__dlm.ssot__Id__c"
+    ),
+    "demo_use": (
+        "First deposit: deposit_count__c >= 1  ·  "
+        "High funder: total_deposits__c >= 5000  ·  "
+        "Net outflow: net_funding__c < 0"
+    ),
+}
+
+_TRADER_RISK_PROFILE_CI = {
+    "key":         "TraderRiskProfile",
+    "displayName": "{prefix} Trader Risk Profile",
+    "description": (
+        "Risk exposure profile per trader: leverage ratio, margin utilisation rate, "
+        "and churn score based on account equity and recent trading frequency. "
+        "Powers responsible-trading alerts and at-risk segmentation."
+    ),
+    "sql": (
+        "SELECT\n"
+        "    UnifiedssotIndividualRt__dlm.ssot__Id__c AS unified_individual__c,\n"
+        "    SUM(TradingAccount__dlm.Leverage__c) AS total_leverage__c,\n"
+        "    SUM(TradingAccount__dlm.MarginUsed__c) * 1.0\n"
+        "        / NULLIF(SUM(TradingAccount__dlm.Equity__c), 0) AS margin_utilisation_rate__c,\n"
+        "    CASE\n"
+        "        WHEN SUM(TradingAccount__dlm.Equity__c) < 100 THEN 80\n"
+        "        WHEN SUM(TradingAccount__dlm.Equity__c) < 500 THEN 55\n"
+        "        WHEN SUM(TradingAccount__dlm.Equity__c) < 2000 THEN 30\n"
+        "        ELSE 10\n"
+        "    END AS churn_score__c\n"
+        + _UNIFIED_JOINS +
+        "JOIN TradingAccount__dlm\n"
+        "    ON TradingAccount__dlm.PartyId__c = UnifiedLinkssotIndividualRt__dlm.SourceRecordId__c\n"
+        "GROUP BY UnifiedssotIndividualRt__dlm.ssot__Id__c"
+    ),
+    "demo_use": (
+        "High margin util: margin_utilisation_rate__c >= 0.7  ·  "
+        "Churn risk: churn_score__c >= 65  ·  "
+        "Low equity: total_leverage__c >= 50"
+    ),
+}
+
+TRADING_CIS = [
+    _TRADING_ACCOUNT_PROFILE_CI,
+    _TRADING_ACTIVITY_CI,
+    _DEPOSIT_PROFILE_CI,
+    _TRADER_RISK_PROFILE_CI,
+    _ENGAGEMENT_CI,
+]
+
 
 # ─── Industry CI map ──────────────────────────────────────────────────────────
 
@@ -1939,6 +2068,7 @@ INDUSTRY_CI_MAP = {
     "real_estate": REAL_ESTATE_CIS,
     "betting":     BETTING_CIS,
     "postal":      POSTAL_CIS,
+    "trading":     TRADING_CIS,
 }
 
 

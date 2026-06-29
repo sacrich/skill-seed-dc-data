@@ -64,7 +64,7 @@ INDUSTRY_LABEL = {
     "ecommerce":   "Ecommerce",  "hospitality": "Hospitality",
     "media":       "Media",      "automotive":  "Automotive",
     "real_estate": "RealEstate", "betting":     "Betting",
-    "postal":      "Postal",
+    "postal":      "Postal",    "trading":     "Trading",
 }
 INDUSTRY_STEM_ABBREV = {"hightech": "ht"}
 # Suffixes that come from standard (non-industry-specific) streams and need the
@@ -911,6 +911,45 @@ INDUSTRY_CUSTOM_MAPPINGS = {
             ("renewal_date", "RenewalDate__c"),
         ]),
     ],
+    "trading": [
+        ("Trading_Accounts", "TradingAccount__dlm", [
+            ("account_id",   "Id__c"),
+            ("contact_id",   "PartyId__c"),
+            ("account_type", "AccountType__c"),
+            ("balance",      "Balance__c"),
+            ("equity",       "Equity__c"),
+            ("margin_used",  "MarginUsed__c"),
+            ("leverage",     "Leverage__c"),
+            ("kyc_status",   "KycStatus__c"),
+            ("status",       "Status__c"),
+            ("opened_date",  "OpenedDate__c"),
+        ]),
+        ("Trades", "Trade__dlm", [
+            ("trade_id",        "Id__c"),
+            ("contact_id",      "PartyId__c"),
+            ("account_id",      "AccountId__c"),
+            ("trade_datetime",  "TradeDatetime__c"),
+            ("instrument",      "Instrument__c"),
+            ("instrument_type", "InstrumentType__c"),
+            ("direction",       "Direction__c"),
+            ("quantity",        "Quantity__c"),
+            ("open_price",      "OpenPrice__c"),
+            ("close_price",     "ClosePrice__c"),
+            ("pnl",             "Pnl__c"),
+            ("status",          "Status__c"),
+            ("duration_hours",  "DurationHours__c"),
+        ]),
+        ("Deposits_Withdrawals", "DepositWithdrawal__dlm", [
+            ("tx_id",        "Id__c"),
+            ("contact_id",   "PartyId__c"),
+            ("account_id",   "AccountId__c"),
+            ("tx_datetime",  "TxDatetime__c"),
+            ("tx_type",      "TxType__c"),
+            ("amount",       "Amount__c"),
+            ("method",       "Method__c"),
+            ("status",       "Status__c"),
+        ]),
+    ],
 }
 
 
@@ -966,6 +1005,8 @@ def existing_mappings(core_url: str, token: str, dmos: list = None) -> dict:
         "Vehicle__dlm", "ServiceRecord__dlm",
         "PropertyInquiry__dlm", "PropertyTransaction__dlm",
         "BettingAccount__dlm", "BettingTransaction__dlm",
+        "Parcel__dlm", "PostalProduct__dlm",
+        "TradingAccount__dlm", "Trade__dlm", "DepositWithdrawal__dlm",
     ]
     pairs = {}
     for dmo in (dmos or ALL_DMOS):

@@ -107,6 +107,10 @@ CATEGORY_MAP = {
     # ── POSTAL ───────────────────────────────────────────────────────────────
     "parcels":               "Engagement",  # ship_datetime (DateTime)
     "postal_products":       "Other",       # subscription holdings — mutable
+    # ── TRADING ──────────────────────────────────────────────────────────────
+    "trading_accounts":      "Other",       # account holdings — mutable
+    "trades":                "Engagement",  # trade_datetime (DateTime)
+    "deposits_withdrawals":  "Engagement",  # tx_datetime (DateTime)
 }
 
 # Which column is the primary key, by file stem
@@ -156,6 +160,9 @@ PK_MAP = {
     "betting_transactions": "tx_id",
     "parcels":              "parcel_id",
     "postal_products":      "product_id",
+    "trading_accounts":     "account_id",
+    "trades":               "trade_id",
+    "deposits_withdrawals": "tx_id",
 }
 
 # Event date field for Engagement DLOs only (field name: eventDateTimeFieldName in API).
@@ -181,6 +188,8 @@ EVENT_DATE_MAP = {
     "property_inquiries":   "inquiry_datetime",
     "betting_transactions": "transaction_datetime",
     "parcels":              "ship_datetime",
+    "trades":               "trade_datetime",
+    "deposits_withdrawals": "tx_datetime",
 }
 
 # Display label inserted into stream names for each industry vertical.
@@ -194,7 +203,7 @@ INDUSTRY_LABEL = {
     "ecommerce":   "Ecommerce",  "hospitality": "Hospitality",
     "media":       "Media",      "automotive":  "Automotive",
     "real_estate": "RealEstate", "betting":     "Betting",
-    "postal":      "Postal",
+    "postal":      "Postal",    "trading":     "Trading",
 }
 
 # Industries whose CSV stems use a short abbreviation (e.g. ht_subscriptions).
