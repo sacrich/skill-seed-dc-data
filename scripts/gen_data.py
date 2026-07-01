@@ -2195,6 +2195,11 @@ def gen_service_records(contacts: list, vehicles: list) -> list:
 RE_PROPERTY_TYPES = ["Apartment", "House", "Villa", "Studio", "Penthouse", "Townhouse"]
 RE_CHANNELS = ["Website", "Agent", "Portal", "Referral", "Social Media", "Walk-in"]
 RE_TRANSACTION_TYPES = ["Purchase", "Rental"]
+RE_PROJECT_NAMES = [
+    "Marina Towers", "Skyline Residences", "Green Valley", "City Center Plaza",
+    "Harbour View", "Palm Gardens", "The Metropolitan", "Riverside Park",
+    "Azure Heights", "Grand Central Residences", "Oakwood Heights", "The Landmark",
+]
 
 RE_CITIES = [
     "London", "Manchester", "Birmingham", "Bristol", "Leeds",
@@ -2253,6 +2258,7 @@ def gen_property_inquiries(contacts: list) -> list:
                 "bedrooms":         bdrms,
                 "city":             city,
                 "channel":          random.choice(RE_CHANNELS),
+                "project_name":     random.choice(RE_PROJECT_NAMES),
             })
     return rows
 
@@ -2290,6 +2296,7 @@ def gen_property_transactions(contacts: list) -> list:
                 "city":             city,
                 "agent_name":       random.choice(RE_AGENTS),
                 "commission":       commission,
+                "project_name":     random.choice(RE_PROJECT_NAMES),
             })
     return rows
 

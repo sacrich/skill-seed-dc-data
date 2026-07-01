@@ -96,6 +96,13 @@ INDUSTRY_CIS = {
         "AccountHealthProfile",
         "EngagementScore",
     ],
+    "real_estate": [
+        "InquiryProfile",
+        "TransactionProfile",
+        "CustomerValue",
+        "EngagementScore",
+        "BudgetProfile",
+    ],
 }
 
 
@@ -107,7 +114,7 @@ def ci_api_names(slug: str, industry: str) -> list[str]:
     return [f"{prefix}_{name}__cio" for name in base_names]
 
 
-def query_ci_count(core_url: str, token: str, ci_name: str) -> int | None:
+def query_ci_count(core_url: str, token: str, ci_name: str):
     """
     Run SELECT COUNT(*) on the CI. Returns the count, or None if the query errors
     (CI doesn't exist or hasn't materialized yet).

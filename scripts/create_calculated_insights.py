@@ -1561,7 +1561,6 @@ _CONTENT_PROFILE_CI = {
         + _UNIFIED_JOINS +
         "JOIN ContentView__dlm\n"
         "    ON ContentView__dlm.PartyId__c = UnifiedLinkssotIndividualRt__dlm.SourceRecordId__c\n"
-        "   AND ContentView__dlm.ViewDatetime__c >= DATEADD(DAY, -720, CURRENT_TIMESTAMP())\n"
         "GROUP BY UnifiedssotIndividualRt__dlm.ssot__Id__c"
     ),
     "demo_use": (
@@ -1710,19 +1709,23 @@ _INQUIRY_PROFILE_CI = {
         "    UnifiedssotIndividualRt__dlm.ssot__Id__c AS unified_individual__c,\n"
         "    COUNT(PropertyInquiry__dlm.Id__c) AS total_inquiries__c,\n"
         "    AVG(PropertyInquiry__dlm.ListingPrice__c) AS avg_inquiry_price__c,\n"
-        "    MAX(PropertyInquiry__dlm.PropertyType__c) AS preferred_property_type__c,\n"
-        "    MAX(PropertyInquiry__dlm.City__c) AS preferred_city__c,\n"
-        "    MAX(PropertyInquiry__dlm.InquiryDatetime__c) AS latest_inquiry_date__c\n"
+        "    MAX(PropertyInquiry__dlm.InquiryDatetime__c) AS latest_inquiry_date__c,\n"
+        "    SUM(CASE WHEN PropertyInquiry__dlm.PropertyType__c = 'Apartment' THEN 1 ELSE 0 END) AS apartment_inquiries__c,\n"
+        "    SUM(CASE WHEN PropertyInquiry__dlm.PropertyType__c = 'House' THEN 1 ELSE 0 END) AS house_inquiries__c,\n"
+        "    SUM(CASE WHEN PropertyInquiry__dlm.PropertyType__c = 'Villa' THEN 1 ELSE 0 END) AS villa_inquiries__c,\n"
+        "    SUM(CASE WHEN PropertyInquiry__dlm.PropertyType__c = 'Penthouse' THEN 1 ELSE 0 END) AS penthouse_inquiries__c,\n"
+        "    COUNT(DISTINCT PropertyInquiry__dlm.ProjectName__c) AS distinct_projects__c\n"
         + _UNIFIED_JOINS +
         "JOIN PropertyInquiry__dlm\n"
         "    ON PropertyInquiry__dlm.PartyId__c = UnifiedLinkssotIndividualRt__dlm.SourceRecordId__c\n"
-        "   AND PropertyInquiry__dlm.InquiryDatetime__c >= DATEADD(DAY, -720, CURRENT_TIMESTAMP())\n"
         "GROUP BY UnifiedssotIndividualRt__dlm.ssot__Id__c"
     ),
     "demo_use": (
         "Active searchers: total_inquiries__c >= 3  ·  "
         "Luxury seekers: avg_inquiry_price__c >= 1000000  ·  "
-        "Apartment hunters: preferred_property_type__c = 'Apartment'"
+        "Apartment hunters: apartment_inquiries__c >= 1  ·  "
+        "Multi-project interest: distinct_projects__c >= 3  ·  "
+        "Luxury project seeker: avg_inquiry_price__c >= 2500000"
     ),
 }
 
@@ -1740,7 +1743,8 @@ _TRANSACTION_PROFILE_CI = {
         "    COUNT(PropertyTransaction__dlm.Id__c) AS total_transactions__c,\n"
         "    SUM(PropertyTransaction__dlm.SalePrice__c) AS total_sale_value__c,\n"
         "    AVG(PropertyTransaction__dlm.SalePrice__c) AS avg_sale_price__c,\n"
-        "    MAX(PropertyTransaction__dlm.TransactionType__c) AS primary_transaction_type__c,\n"
+        "    SUM(CASE WHEN PropertyTransaction__dlm.TransactionType__c = 'Sale' THEN 1 ELSE 0 END) AS sale_count__c,\n"
+        "    SUM(CASE WHEN PropertyTransaction__dlm.TransactionType__c = 'Rental' THEN 1 ELSE 0 END) AS rental_count__c,\n"
         "    MAX(PropertyTransaction__dlm.CloseDate__c) AS latest_close_date__c\n"
         + _UNIFIED_JOINS +
         "JOIN PropertyTransaction__dlm\n"
@@ -1750,7 +1754,7 @@ _TRANSACTION_PROFILE_CI = {
     "demo_use": (
         "Repeat buyers: total_transactions__c >= 2  ·  "
         "High-value: avg_sale_price__c >= 800000  ·  "
-        "Renters: primary_transaction_type__c = 'Rental'"
+        "Renters: rental_count__c >= 1"
     ),
 }
 
@@ -1807,7 +1811,6 @@ _PLAYER_PROFILE_CI = {
         + _UNIFIED_JOINS +
         "JOIN BettingTransaction__dlm\n"
         "    ON BettingTransaction__dlm.PartyId__c = UnifiedLinkssotIndividualRt__dlm.SourceRecordId__c\n"
-        "   AND BettingTransaction__dlm.TransactionDatetime__c >= DATEADD(DAY, -720, CURRENT_TIMESTAMP())\n"
         "GROUP BY UnifiedssotIndividualRt__dlm.ssot__Id__c"
     ),
     "demo_use": (

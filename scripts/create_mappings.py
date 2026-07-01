@@ -852,6 +852,7 @@ INDUSTRY_CUSTOM_MAPPINGS = {
             ("bedrooms",        "Bedrooms__c"),
             ("city",            "City__c"),
             ("channel",         "Channel__c"),
+            ("project_name",    "ProjectName__c"),
         ]),
         ("Property_Transactions", "PropertyTransaction__dlm", [
             ("transaction_id",   "Id__c"),
@@ -865,6 +866,7 @@ INDUSTRY_CUSTOM_MAPPINGS = {
             ("city",             "City__c"),
             ("agent_name",       "AgentName__c"),
             ("commission",       "Commission__c"),
+            ("project_name",     "ProjectName__c"),
         ]),
     ],
     "betting": [

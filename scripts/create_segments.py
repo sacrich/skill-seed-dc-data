@@ -2752,9 +2752,9 @@ def real_estate_segment_defs(prefix: str) -> list:
             "includeCriteria": _logic([
                 _ci_filter(
                     f"{p}_TransactionProfile__cio",
-                    "primary_transaction_type__c",
-                    _text_cmp(f"{p}_TransactionProfile__cio", "primary_transaction_type__c",
-                              "equal to", "Rental"),
+                    "rental_count__c",
+                    _num_cmp(f"{p}_TransactionProfile__cio", "rental_count__c",
+                             "greater than or equal", 1),
                 ),
             ]),
             "excludeCriteria": _logic([]),
@@ -2784,6 +2784,31 @@ def real_estate_segment_defs(prefix: str) -> list:
                              "greater than or equal", 90),
                 ),
             ]),
+        },
+        # 6. LuxuryProjectSeeker
+        {
+            "key":         f"{p}_LuxuryProjectSeeker",
+            "displayName": f"{p} Luxury Project Seeker",
+            "description": (
+                "Buyers interested in 2+ projects with an average inquiry price of £2,500,000+. "
+                "Target with VIP off-market invitations and exclusive pre-launch access."
+            )[:240],
+            "requires_ir": True,
+            "includeCriteria": _logic([
+                _ci_filter(
+                    f"{p}_InquiryProfile__cio",
+                    "avg_inquiry_price__c",
+                    _num_cmp(f"{p}_InquiryProfile__cio", "avg_inquiry_price__c",
+                             "greater than or equal", 2500000),
+                ),
+                _ci_filter(
+                    f"{p}_InquiryProfile__cio",
+                    "distinct_projects__c",
+                    _num_cmp(f"{p}_InquiryProfile__cio", "distinct_projects__c",
+                             "greater than or equal", 2),
+                ),
+            ]),
+            "excludeCriteria": _logic([]),
         },
     ]
 
